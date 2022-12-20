@@ -47,8 +47,8 @@ for halo_name in halo_names:
                  'MZ_star','MZdot_star']
     
     for test_var in test_vars:
-        # NOTE: may want to switch to np.testing.assert_array_allclose() with rtol set to machine precision
-        np.testing.assert_array_equal(sol_test[test_var],sol_ref[test_var],err_msg='>>>>> test failed for comparing %s to reference solution'%test_var)
+        # np.testing.assert_array_equal(sol_test[test_var],sol_ref[test_var],err_msg='>>>>> test failed for comparing %s to reference solution'%test_var)
+        np.testing.assert_allclose(sol_test[test_var],sol_ref[test_var],rtol=1e-5,err_msg='>>>>> test failed for comparing %s to reference solution'%test_var)
         
         
 # do NOT close the output and reference test files in case user wants to interactively plot things in test_interactive.ipynb 
