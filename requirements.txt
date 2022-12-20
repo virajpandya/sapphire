@@ -3,4 +3,3 @@ scipy >= 1.9.0
 matplotlib >= 3.5.0
 astropy >= 5.1
 h5py
-mpi4py

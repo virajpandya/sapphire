@@ -1,0 +1,40 @@
+name: automated sapphire testing
+
+on:
+  - push # run this automated GitHub actions workflow every time we push 
+
+jobs:
+  test:
+    runs-on: ubuntu-latest # which github-provided runner to run on 
+    strategy:
+      matrix:
+        python-version: ["3.10"] # possibly run on multiple python versions 
+
+    # for each python-version configuration defined above, run the following steps sequentially
+    steps:
+      - name: checkout repository # pull our sapphire repo onto the runner environment
+        uses: actions/checkout@v3 # a github-provided action to accomplish our pull of sapphire repo
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v3 # use another github-provided action to get our requested python version
+        with:
+          python-version: ${{ matrix.python-version }}        
+
+      - name: Install dependencies # this will upgrade pip and install our dependency packages in requirements.txt
+        run: | 
+          python -m pip install --upgrade pip 
+          pip install -r requirements.txt 
+
+      - name: add sapphire to PYTHONPATH # this will make sure python can find and import checked out sapphire repo 
+        run: |
+          echo "PYTHONPATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV 
+          echo "$GITHUB_WORKSPACE"
+          echo "${{ env.PYTHONPATH }}"
+      
+      - name: test_run 
+        run: python tests/test_run.py 
+
+      - name: test_validate
+        run: python tests/test_validate.py 
+
+      
