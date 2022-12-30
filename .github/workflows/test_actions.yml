@@ -28,8 +28,8 @@ jobs:
       - name: add sapphire to PYTHONPATH # this will make sure python can find and import checked out sapphire repo 
         run: |
           echo "PYTHONPATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV 
-          echo "$GITHUB_WORKSPACE"
-          echo "${{ env.PYTHONPATH }}"
+          echo "GITHUB_WORKSPACE = $GITHUB_WORKSPACE"
+          echo "GITHUB_ENV = $GITHUB_ENV"
       
       - name: test_run 
         run: python tests/test_run.py 
