@@ -18,18 +18,19 @@ import os
 
 all_halos = ['m10q','m10y','m10z','m11a','m11b','m11c','m11q','m11v','m11f','m12i','m12f','m12m']
     
-def read_halos(halo_names, tree_dir):
+def read_trees(tree_path, min_root_mass=None, halo_names=all_halos):
     """
-    Reads Viraj's custom merger tree ASCII file for the core FIRE-2 halos
+    Reads Viraj's custom merger tree ASCII file for the core FIRE-2 halos created for Pandya+22
     
-    halo_names is a list of strings that must be in the all_halos list defined above
-    tree_dir is the *absolute* path to the directory containing Viraj's files    
+    tree_path is the *absolute* path to the directory containing Viraj's files    
+    min_root_mass is irrelevant for fire2 sapphire trees (its for large volume simulations)
+    halo_names is a list of strings that can be a subset of all_halos above 
     
     Returns a dict of Astropy Table objects with keys being the halo names
     """
     
     # if halo_names is empty, do all halos
-    if len(halo_names) == 0: 
+    if halo_names == None or len(halo_names) == 0: # process all 12 core FIRE-2 halos
         halo_names = all_halos.copy()    
     
     # raise error if halo_names contains strings not in the global all_halos list above
@@ -41,7 +42,7 @@ def read_halos(halo_names, tree_dir):
     
     for halo_name in halo_names:
         # using os.path.join to avoid ambiguity with slashes (note: filename itself should NOT start with slash)
-        t = Table.read(os.path.join(tree_dir,'fire2_viraj_%s.dat'%halo_name),format='ascii')
+        t = Table.read(os.path.join(tree_path,'pandya22_%s.dat'%halo_name),format='ascii')
         
         # create any new columns needed for interpolate_trees.py (using the column names that module expects)
         t['log_mvir'] = t['logmvir'] # log10 Mvir in Msun (changing to universal column name)
@@ -56,15 +57,3 @@ def read_halos(halo_names, tree_dir):
     return tables_fire 
 
 
-def test():    
-
-    # test_halos = all_halos.copy()
-    test_halos = []
-    
-    ts = read_halos(halo_names=test_halos,tree_dir='/Users/viraj/sapphire/tests/example_merger_trees/fire2_viraj/')
-
-    print(len(ts))
-    
-    return None
-
-# test()

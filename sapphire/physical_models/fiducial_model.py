@@ -328,15 +328,21 @@ def combine_outputs(sol,parameters,inputs):
     return comb_dict 
     
                
-def integrator(parameters,tree_interpolators,parameter_functions,uvb_model,coolfunc,t_init=0.3,t_final=Planck15.age(0).value,t_steps=1000):
+def integrator(halo_data,parameters,parameter_functions,uvb_model,coolfunc,t_init=0.3,t_final=Planck15.age(0).value,t_steps=1000):
     """
     This is the main function that initializes the model, calls the ODE integrator, and saves outputs. 
+    
+    halo_data is a tuple (halo_name, tree_interpolators) -- see driver.py for what the list tree_interpolators means
+    
+    return signature is always a dict with halo_name:result_dict key-value pair for this single halo
     """
     
+    halo_name, tree_interpolators = halo_data 
+    
     # set up the timespan to integrate (convert from Gyr to seconds) and request 1000 points evaluated 
-    t_init *= 1e9 * yr_to_s
+    t_init *= 1e9 * yr_to_s 
     t_final *= 1e9 * yr_to_s 
-    t_eval = np.linspace(t_init, t_final, t_steps)
+    t_eval = np.linspace(t_init, t_final, t_steps) 
 
     # initial conditions of state variables: Mstar, Mism, Mcgm, Eth_cgm, Ekin_cgm [Msun and erg], MZ_star, MZ_ism, MZ_cgm [Msun assuming Z/Zsun=1e-4]
     initial_conditions = [1,1,1,1,1,2e-6,2e-6,2e-6]
@@ -346,19 +352,21 @@ def integrator(parameters,tree_interpolators,parameter_functions,uvb_model,coolf
     rtol = 1e-3
 
     # call the integrator
-    sol = solve_ivp(evolve_galaxy,[t_init,t_final],initial_conditions,dense_output=True,method='BDF',
-                    atol=atol,rtol=rtol,t_eval=t_eval,
-                    args=(parameters,tree_interpolators,parameter_functions,uvb_model,coolfunc,))
+    try: 
+        sol = solve_ivp(evolve_galaxy,[t_init,t_final],initial_conditions,dense_output=True,method='BDF',
+                        atol=atol,rtol=rtol,t_eval=t_eval,
+                        args=(parameters,tree_interpolators,parameter_functions,uvb_model,coolfunc,))
+    except: # if solve_ivp itself just exits with error, return normal dict structure for this halo but with sol_success = False
+        print('<!----- WARNING: solve_ivp exited with error for halo_name=%s'%halo_name)
+        return {str(halo_name):{'sol_success':False,'sol_object':None}} # no sol object since solve_ivp exited with error
+
     
-    # exit program if integrator failed
-    # NOTE: maybe in final version, shouldn't exit program but instead just raise warning (right now I know the code should always run)
-    if sol.status == -1: # failed to integrate 
-        raise RuntimeError('solve_ivp failed integration with sol.status code = -1')
-    
-    # otherwise call my utility script to merge ALL outputs at each timestep into a dict 
-    # combine the extra input args for solve_ivp into a list that will be unpacked by combine_outputs function (note: do not need t_init, t_final, t_steps)
-    comb_dict = combine_outputs(sol,parameters,[tree_interpolators,parameter_functions,uvb_model,coolfunc])
-    
-    # return the combined dictionary as the solution for this galaxy
-    return comb_dict 
+    # print warning if integrator failed for this halo and return the normal dict structure but with sol_success = False
+    if sol.status == -1:
+        print('<!----- WARNING: solve_ivp completed BUT sol.status code = -1 (failed to integrate) for halo_name=%s'%halo_name)
+        return {str(halo_name):{'sol_success':False,'sol_object':sol}} # returning sol object if helpful for debugging
+    # otherwise call my utility script to merge ALL outputs of ODE function and return normal dict structure for this halo
+    else: 
+        comb_dict = combine_outputs(sol,parameters,[tree_interpolators,parameter_functions,uvb_model,coolfunc])
+        return {str(halo_name):comb_dict} 
     

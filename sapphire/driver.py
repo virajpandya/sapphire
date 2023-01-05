@@ -8,6 +8,8 @@ or JSON file path and then calls the relevant package modules in the order requi
 # load general modules
 import numpy as np
 from glob import glob
+import multiprocessing
+from functools import partial 
 
 # load sapphire modules that do not require dependency injection
 from .coolfunc import read_coolfunc 
@@ -24,6 +26,7 @@ def run(parameters):
     """
     
     # parse the input parameters object (must be a dict or a string giving the path of parameters JSON file that will be converted to dict)
+    print('Parsing input parameters...')
     if type(parameters) == dict: # later will add an argparse util module for making sure the provided dict is sensible
         pass 
     elif type(parameters) == str: 
@@ -34,19 +37,23 @@ def run(parameters):
     # load the relevant tree reading module
     if parameters['tree_type'] == 'fire2_sapphire':
         from .read_trees import read_fire2_sapphire as tree_reader
-    elif parameters['tree_type'] == 'bolshoi_planck':
-        raise NotImplementedError('bolshoi-planck trees not yet implemented')
+    elif parameters['tree_type'] == 'tng':
+        from .read_trees import read_tng as tree_reader
     else: # NOTE: glob and print a list of available tree_type strings based on modules available in read_trees subdirectory
         raise ValueError('tree_type must be one of the types implemented in the read_trees module') 
         
     # now read the trees into a dict where the key is halo name/ID and element is an astropy Table
-    tree_tables = tree_reader.read_halos(halo_names=parameters['halo_names'],tree_dir=parameters['tree_dir'])
+    print('Reading trees...')
+    tree_tables = tree_reader.read_trees(halo_names=parameters['halo_names'],tree_path=parameters['tree_path'],min_root_mass=parameters['min_root_mass'])
     
     # create smooth interpolator functions for required halo properties vs time (redshift, logMAR, logMvir, logRvir, logVvir, logcNFW)
     # this is a dict of lists where each key is a halo name/ID
+    print('Interpolating trees...')
     tree_interpolators = interpolate_trees.run(tree_tables) 
     
+    # NOTE: do all of this pulling of relevant modules during parsing early on in another util module, then do trees here 
     # read in the requested parameter functions module
+    print('Setting up model inputs and parameters...')
     if parameters['parameter_functions'] == 'fire2': 
         from .parameter_functions import fire2 as param_functions 
         
@@ -59,21 +66,37 @@ def run(parameters):
     # read cooling function and create N-dimensional interpolator object
     coolfunc = read_coolfunc.return_coolfunc(parameters['coolfunc'])
     
-    # finally solve for the baryonic evolution of each tree and collect the resulting dict objects into a dict with halo_names/IDs being the keys
-    # NOTE: this can and should be parallelized, along with the read_trees and interpolate_trees steps 
-    dict_results = {}
+    print('Evolving model halos...')    
+    # by default we will assume a single node and use all cores on that node to solve every tree in parallel 
+    # NOTE: later we will add an option to use mpi4py to distribute integrations (and tree reading) across cores of multiple nodes
     
-    for halo_name in tree_tables.keys(): 
-        
-        comb_dict = fiducial_model.integrator(parameters,tree_interpolators[halo_name],list_param_functions,list_uvb_filtering,coolfunc)
-        
-        dict_results[halo_name] = comb_dict
-        
-        print('>>>>> FINISHED halo=%s'%halo_name)
+    # use functools.partial to fix most arguments to the integrator function except the tuple (halo_name, tree_interpolators[halo_name])
+    pool_integrator = partial(fiducial_model.integrator,parameters=parameters,parameter_functions=list_param_functions,uvb_model=list_uvb_filtering,coolfunc=coolfunc)
+    
+    # zip list of tuples of (halo_name, tree_interpolators[halo_name]) pairs for pool_integrator function
+    halo_data_tuples = [(k,v) for k,v in tree_interpolators.items()]
+    
+    # set up for python single-node parallel processing
+    PoolProcesses = multiprocessing.cpu_count()
+    print('we will process %s trees in parallel'%PoolProcesses,flush=True)
+
+    # start pool process 
+    pool = multiprocessing.Pool(processes=PoolProcesses) 
+
+    # call the pool_integrator function in parallel with each pair in halo_data_tuples as inputs
+    out = pool.map(pool_integrator,halo_data_tuples)
+
+    # close pool processes to free memory
+    pool.close()
+    pool.join()
+
+    # collapse the list of dicts into a single dict with halo_name:results_dict pairs 
+    dict_results = {key:value for d in out for key,value in d.items()}
                 
     # finally save all dictionaries into a single npz file with keys being the halo names/IDs
-    # NOTE: this is a temporary way of saving -- it will be moved to another module and either hdf5 or msgpack
-    np.savez(parameters['output_file'], **dict_results)
+    # NOTE: this is a temporary way of saving -- will create a separate writer module function and output will be either hdf5 or msgpack
+    print('Saving outputs...')
+    np.savez_compressed(parameters['output_file'], **dict_results)
     
     print('Finished -- thank you for using sapphire!',flush=True)
 

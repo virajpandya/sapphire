@@ -62,31 +62,3 @@ def run(tree_tables):
         
     return tree_interpolators 
 
-
-def test():
-    
-    #### Temporary test
-    import os 
-
-    ### in a for loop, call read_halo() for each individual halo_name
-    tables_fire = {}
-
-    for halo_name in ['m10q','m10y','m10z','m11a','m11b','m11c','m11q','m11v','m11f','m12i','m12f','m12m']:
-        # using os.path.join to avoid ambiguity with slashes (note: filename itself should NOT start with slash)
-        t = Table.read(os.path.join('/Users/viraj/sapphire/tests/example_merger_trees/fire2_viraj/','merge_catalogs_offline_%s_stampede2.dat'%halo_name),format='ascii')
-        
-        # create any new columns needed for interpolate_trees.py (using the column names that module expects)
-        t['log_mvir'] = t['logmvir'] # log10 Mvir in Msun (changing to universal column name)
-        t['log_rvir'] = np.log10(10**t['logrvir']*t['scale']) # log10 Rvir in proper kpc [NOTE: new column name has underscore in it]
-        t['log_vvir'] = np.log10(t['Vvir_DM']) # log10 Vvir = sqrt(GMvir/Rvir) in k/s 
-        t['log_cNFW'] = np.log10(t['halo_conc']) # log10 of halo NFW concentration = Rvir/Rs_klypin
-        t['dm_accretion_rate'] = t['mdot_in_halo_dm_tracked'] # halo mass accretion rate in Msun/yr [NOTE: not log10 since this can be <= 0 if net rate]
-        
-        tables_fire[halo_name] = t
-        
-    test = run(tables_fire)
-    print(test['m10q'])
-    
-    return None
-
-# test()
