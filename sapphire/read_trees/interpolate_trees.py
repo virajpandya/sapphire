@@ -35,9 +35,10 @@ def run(tree_tables):
     tree_interpolators = {}
     
     # loop over each tree and create then store the needed interpolator objects
-    # NOTE: if this is slow for large simulations, can do another optional round of multiprocessing/mpi4py here
     for tname in tree_tables.keys():
         t = tree_tables[tname]
+
+        # NOTE: extrapolation is not allowed and will raise an error (we do not want to introduce garbage data for early unresolved history)
 
         # faster to interpolate snapshot redshift than do cosmology root-finding calculation
         interp_redshift = UnivariateSpline(t['cosmic_age'],t['redshift'],k=5,s=0) 

@@ -18,16 +18,18 @@ import os
 
 all_halos = ['m10q','m10y','m10z','m11a','m11b','m11c','m11q','m11v','m11f','m12i','m12f','m12m']
     
-def read_trees(tree_path, min_root_mass=None, halo_names=all_halos):
+def read_trees(parameters):
     """
     Reads Viraj's custom merger tree ASCII file for the core FIRE-2 halos created for Pandya+22
     
-    tree_path is the *absolute* path to the directory containing Viraj's files    
-    min_root_mass is irrelevant for fire2 sapphire trees (its for large volume simulations)
-    halo_names is a list of strings that can be a subset of all_halos above 
+    input is the user-provided parameters dict which contains the parameters we need 
     
     Returns a dict of Astropy Table objects with keys being the halo names
     """
+    
+    # parse the parameters dict for parameters we need 
+    tree_path = parameters['tree_path'] # *absolute* path to directory containing the pandya22_$halo_name.dat files
+    halo_names = parameters['halo_names'] # list of halo names to read, if [] or None, process all 12 core FIRE-2 halos
     
     # if halo_names is empty, do all halos
     if halo_names == None or len(halo_names) == 0: # process all 12 core FIRE-2 halos

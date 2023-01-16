@@ -328,7 +328,7 @@ def combine_outputs(sol,parameters,inputs):
     return comb_dict 
     
                
-def integrator(halo_data,parameters,parameter_functions,uvb_model,coolfunc,t_init=0.3,t_final=Planck15.age(0).value,t_steps=1000):
+def integrator(halo_data,parameters,parameter_functions,uvb_model,coolfunc,t_steps=1000):
     """
     This is the main function that initializes the model, calls the ODE integrator, and saves outputs. 
     
@@ -339,9 +339,11 @@ def integrator(halo_data,parameters,parameter_functions,uvb_model,coolfunc,t_ini
     
     halo_name, tree_interpolators = halo_data 
     
-    # set up the timespan to integrate (convert from Gyr to seconds) and request 1000 points evaluated 
-    t_init *= 1e9 * yr_to_s 
-    t_final *= 1e9 * yr_to_s 
+    # set up the timespan to integrate in seconds 
+    # get the initial and final integration times from the get_knots() function for any of the interpolator functions
+    # then sample t_steps number of points between t_init and t_final
+    t_init = tree_interpolators[0].get_knots()[0] * 1e9 * yr_to_s  
+    t_final = tree_interpolators[0].get_knots()[-1] * 1e9 * yr_to_s 
     t_eval = np.linspace(t_init, t_final, t_steps) 
 
     # initial conditions of state variables: Mstar, Mism, Mcgm, Eth_cgm, Ekin_cgm [Msun and erg], MZ_star, MZ_ism, MZ_cgm [Msun assuming Z/Zsun=1e-4]
