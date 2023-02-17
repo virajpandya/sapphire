@@ -1,5 +1,5 @@
 # sapphire
-sapphire is a next-generation multi-zone model of galaxy formation [JAX version not yet ported] 
+sapphire is a next-generation multi-zone model of galaxy formation [JAX version to be ported soon] 
 
 <img width="1080" alt="sapphire_jax_github" src="https://user-images.githubusercontent.com/4482189/219704156-47d53e16-34b3-4937-863c-e05570c685ea.png">
 logo/banner is a work in progress ... 
