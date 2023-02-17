@@ -13,8 +13,8 @@ Until we have a public release that can be pip/conda installed, please do the fo
 #1 can easily be done by downloading miniconda, navigating to the cloned sapphire git directory and doing ```conda env create -f environment.yml```
 This will create a new environment called sapphire which you can activate by doing ```conda activate sapphire```. 
 
-#3 will enable you to do ```import sapphire``` in Python from anywhere on your system without needing to be in the cloned sapphire git firectory. 
-Once we allow pip install, #2 will no longer be necessary. Right now it is useful during development. 
+#3 will enable you to do ```import sapphire``` in Python from anywhere on your system without needing to be in the cloned sapphire git directory. 
+Once we allow pip install, #2 and #3 will no longer be necessary except for maybe the private development branch.
 
 # Basic usage 
 You can run sapphire with effectively only 2 lines, along with lines that define a dictionary of model/runtime parameters: 
