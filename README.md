@@ -6,7 +6,7 @@ sapphire is a next-generation multi-zone model of galaxy formation [JAX version 
 
 # Installation instructions 
 Until we have a public release that can be pip/conda installed, please do the following to install the private development version: 
-1. git clone git@github.com:virajpandya/sapphire.git  (NOTE: this is a private repo so you'll probably need your git login)
+1. ```git clone git@github.com:virajpandya/sapphire.git```  (NOTE: this is a private repo so you'll probably need your git login)
 2. in your .bashrc or .zshrc or .profile, add this line: export PYTHONPATH=$PYTHONPATH:"/PATH/TO/sapphire" 
 3. use miniconda to create a new python=3.10 environment with the required dependencies given in environment.yml 
 
