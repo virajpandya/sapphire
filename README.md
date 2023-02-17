@@ -10,11 +10,11 @@ Until we have a public release that can be pip/conda installed, please do the fo
 2. in your .bashrc or .zshrc or .profile, add this line: export PYTHONPATH=$PYTHONPATH:"/PATH/TO/sapphire" 
 3. use miniconda to create a new python=3.10 environment with the required dependencies given in environment.yml 
 
-#2 will enable you to do "import sapphire" in Python from anywhere on your system without needing to be in the cloned sapphire git firectory. 
+#2 will enable you to do ```import sapphire``` in Python from anywhere on your system without needing to be in the cloned sapphire git firectory. 
 Once we allow pip install, #2 will no longer be necessary. Right now it is useful during development. 
 
 #3 can easily be done with miniconda by navigating to the cloned sapphire git directory and doing "conda env create -f environment.yml".
-This will create a new environment called sapphire which you can activate by doing "conda activate sapphire". 
+This will create a new environment called sapphire which you can activate by doing ```conda activate sapphire```. 
 
 # Basic usage 
 You can run sapphire with effectively only 2 lines, along with lines that define a dictionary of model/runtime parameters: 
