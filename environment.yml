@@ -11,6 +11,7 @@ dependencies:
   - astropy >= 5.1
   - h5py
   - yt >= 4.1.2
+  - jupyterlab
   - pip: 
     - configparser >= 5.3.0
     - ytree >= 3.2.0
