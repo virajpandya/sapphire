@@ -38,12 +38,44 @@ def read_trees(parameters):
     tables_tng = npz['arr_0'].item() # this is a dict of astropy tables indexed by root halo ID 
     npz.close()
     
+    # apply min_root_mass and max_root_mass if requested
+    if parameters['min_root_mass'] != None: 
+         tables_tng = {key:value for key,value in tables_tng.items() if 10**value['log_mvir'][-1] >= parameters['min_root_mass']}
+         
+    if parameters['max_root_mass'] != None: 
+         tables_tng = {key:value for key,value in tables_tng.items() if 10**value['log_mvir'][-1] <= parameters['max_root_mass']} 
+    
     # if subvolumes != None, use dict comprehension to keep only the trees requested 
     # WARNING: there is no error check here for whether list of subvolumes makes sense ... should be list of strings like ['0_0_0','0_0_1'] 
     if parameters['subvolumes'] != None: 
         tables_tng = {key:value for key,value in tables_tng.items() if value['subvolume'][0] in parameters['subvolumes']}
-    
-    return tables_tng
-
-
-    
+        
+    # downsample full number of halos to just those requested
+    if parameters['downsample_defs'] == None:
+        return tables_tng
+    else: 
+        # set user-provided random seed for reproducibility since we will use np.random.choice 
+        np.random.seed(parameters['downsample_seed'])
+        
+        # initialize new empty dict that will contain downsampled number of trees
+        downsampled_trees = {}
+        
+        # loop over each user-provided (Mlow,Mhigh,N) tuple to randomly choose N halos in each mass bin 
+        for Mmin,Mmax,N in parameters['downsample_defs']:
+            # use dict comprehension to filter overall trees to just ones in this mass bin
+            tables_bin = {key:value for key,value in tables_tng.items() if value['log_mvir'][-1] >= Mmin and value['log_mvir'][-1] <= Mmax}
+            
+            # use np.random.choice to select just N random halos from this mass bin
+            ind_rand = np.random.choice(list(tables_bin.keys()),size=N,replace=False) 
+            tables_rand = {key:value for key,value in tables_bin.items() if key in ind_rand}
+            
+            # add these halos to the global downsampled_trees
+            downsampled_trees.update(tables_rand)
+            
+        # return this smaller nested dict of trees for a downsampled number of halos
+        return downsampled_trees 
+        
+                
+        
+        
+        

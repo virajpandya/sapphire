@@ -346,8 +346,8 @@ def integrator(halo_data,parameters,parameter_functions,uvb_model,coolfunc,t_ste
 
     #### tolerances
     # just choose reasonably small ones based on experimentation -- rtol gives requested error on exponent of variables, atol relevant for early evolution
-    rtol = 1e-5
-    atol = 1e-3
+    rtol = parameters['rtol'] 
+    atol = parameters['atol'] 
 
     # call the integrator
     try: 
