@@ -176,3 +176,6 @@ cython_debug/
 
 # MacOS 
 .DS_Store
+
+# ignore Viraj's local development folder (ipynbs, data, etc.) 
+localdev/
