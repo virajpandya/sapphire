@@ -12,7 +12,6 @@ from astropy import constants as const
 from astropy import units as u
 from astropy.cosmology import Planck15 
 import os 
-import ytree 
 import multiprocessing 
 from functools import partial
 
