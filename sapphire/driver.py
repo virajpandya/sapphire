@@ -31,7 +31,7 @@ def run(parameters):
     """
     
     # parse the input parameters object (must be a dict or a string giving the path of parameters JSON file that will be converted to dict)
-    print('Parsing input parameters...',flush=True)
+    #print('Parsing input parameters...',flush=True)
     if type(parameters) == dict: # later will add an argparse util module for making sure the provided dict is sensible
         pass 
     elif type(parameters) == str: 
@@ -56,12 +56,12 @@ def run(parameters):
         raise ValueError('tree_type must be one of the types implemented in the read_trees module') 
         
     # now read the trees into a dict where the key is halo name/ID and element is an astropy Table
-    print('Reading trees...',flush=True)
+    #print('Reading trees...',flush=True)
     tree_tables = tree_reader.read_trees(parameters)
     
     # create smooth interpolator functions for required halo properties vs time (redshift, logMAR, logMvir, logRvir, logVvir, logcNFW)
     # this is a dict of lists where each key is a halo name/ID
-    print('Interpolating trees...',flush=True)
+    #print('Interpolating trees...',flush=True)
     tree_interpolators = interpolate_trees.run(tree_tables)
     
     # retrieve the list of UVB filtering mass and collapse fraction functions
@@ -70,7 +70,7 @@ def run(parameters):
     # read cooling function and create N-dimensional interpolator object
     coolfunc = read_coolfunc.return_coolfunc(parameters['coolfunc']) 
     
-    print('Evolving model halos...',flush=True)
+    #print('Evolving model halos...',flush=True)
     
     # by default we will assume a single node and use all cores on that node to solve every tree in parallel 
     # NOTE: later we will add an option to use mpi4py to distribute integrations (and tree reading, and parameter variations) across cores of multiple nodes
@@ -95,7 +95,7 @@ def run(parameters):
     
     # set up for python single-node parallel processing -- by default this will use the full number of cores available since it is not memory-intensive
     PoolProcesses = multiprocessing.cpu_count()
-    print('We will process %s trees in parallel...'%PoolProcesses,flush=True)
+    #print('We will process %s trees in parallel...'%PoolProcesses,flush=True)
 
     # start pool process 
     pool = multiprocessing.Pool(processes=PoolProcesses) 
@@ -118,7 +118,7 @@ def run(parameters):
         return None
     elif parameters['return_or_write'] == 'return':
         # simply return dict_results
-        print('Returning dictionary of results directly instead of writing output files',flush=True)
+        #print('Returning dictionary of results directly instead of writing output files',flush=True)
         
         # June 5, 2023: filter out bad solutions and return as pandas dataframe         
         dict_results_filtered = {key:value for key,value in dict_results.items() if value['sol_success'][0]!=False}
