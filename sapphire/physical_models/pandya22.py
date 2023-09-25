@@ -365,13 +365,13 @@ def integrator(halo_data,parameters,parameter_functions,uvb_model,coolfunc,t_ste
                         atol=atol,rtol=rtol,t_eval=t_eval,
                         args=(parameters,tree_interpolators,parameter_functions,uvb_model,coolfunc,))
     except: # if solve_ivp itself just exits with error, return normal dict structure for this halo but with sol_success = False
-        print('<!----- WARNING: solve_ivp exited with error for halo_name=%s'%halo_name)
+        #print('<!----- WARNING: solve_ivp exited with error for halo_name=%s'%halo_name)
         return {str(halo_name):{'sol_success':False,'sol_object':None}} # no sol object since solve_ivp exited with error
 
     
     # print warning if integrator failed for this halo and return the normal dict structure but with sol_success = False
     if sol.status == -1:
-        print('<!----- WARNING: solve_ivp completed BUT sol.status code = -1 (failed to integrate) for halo_name=%s'%halo_name)
+        #print('<!----- WARNING: solve_ivp completed BUT sol.status code = -1 (failed to integrate) for halo_name=%s'%halo_name)
         return {str(halo_name):{'sol_success':False,'sol_object':sol}} # returning sol object if helpful for debugging
     # otherwise call my utility script to merge ALL outputs of ODE function and return normal dict structure for this halo
     else: 

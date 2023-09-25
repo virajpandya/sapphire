@@ -362,7 +362,7 @@ def integrator(halo_data,parameters,parameter_functions,uvb_model,coolfunc,t_ste
     
     # print warning if integrator failed for this halo and return the normal dict structure but with sol_success = False
     if sol.status == -1:
-        print('<!----- WARNING: solve_ivp completed BUT sol.status code = -1 (failed to integrate) for halo_name=%s'%halo_name)
+        #print('<!----- WARNING: solve_ivp completed BUT sol.status code = -1 (failed to integrate) for halo_name=%s'%halo_name)
         # June 5, 2023: return time series of sol_success=False to enable dict comprehension later to filter these bad sols out        
         return {str(halo_name):{'sol_success':np.full(t_steps,False),'sol_object':sol}} # returning sol object if helpful for debugging
     # otherwise call my utility script to merge ALL outputs of ODE function and return normal dict structure for this halo
