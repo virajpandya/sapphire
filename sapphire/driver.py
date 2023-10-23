@@ -83,6 +83,9 @@ def run(parameters):
     elif parameters['physical_model'] == 'thermal_general':
         from .physical_models import thermal_general as physical_model
         from .parameter_functions import thermal_general as param_functions
+    elif parameters['physical_model'] == 'thermal_general_AGN':
+        from .physical_models import thermal_general_AGN as physical_model
+        from .parameter_functions import thermal_general as param_functions
         
     # retrieve the list of parameter fitting functions in the order expected for unpacking by the integrator
     list_param_functions = param_functions.get()    
