@@ -28,6 +28,7 @@ s_to_yr = u.s.to('yr')
 Msun_to_g = u.Msun.to('g') 
 f_b = Planck15.Ob0 / Planck15.Om0 # ~15 %
 G = const.G.to('cm**3 / (g * s**2)').value
+c = const.c.to('cm/s').value
 
 # define analytic functions to return n0 (density within Rvir) and T0 (temperature at Rvir) given state variables and assumed profile slopes
 # NOTE: this is temporarily here -- eventually will be moved to the relevant subgrid_recipes CGM module 
@@ -208,19 +209,77 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     #     Mdot_wind = 0.0
     #     etaE_ism = 0.0
     
-    ### compute Mdot_BH term
-    Mdot_bh_quasar = f_bh * M_ism / (tdyn_ism*1e9) #Msun/yr
-    #Calculate auxiliary quants for radio mode
-    temp = T0_val
-    cool_func = coolfunc([redshift,log_Zcgm,np.log10(T0_val),np.log10(n0_val*rff**alpha_n)])[0] # erg/s * cm**3
-    # print("Redshift is %.3f" %redshift)
-    # print("Cool func is %.1e" %cool_func)
-    if cool_func > 0:
-        Mdot_bh_radio = kappa_bh * 15./16. * G * np.pi * const_mp_cgs * 0.59 * np.pi * (const_kB * temp) / cool_func * M_BH / yr_to_s #Msun/yr
-    else:
-        Mdot_bh_radio = 0.0
-    #mu=0.59, G in cm**3 / (g * s**2), kB in erg/K, m_p in g
-    Mdot_bh = Mdot_bh_quasar + Mdot_bh_radio    
+    ############## BH accretion model: ################
+    
+    ### Select between 'model1' (Sophie's) or 'model2' (bry's Mdotbh~sfr)
+    accmodel = 'model2'
+    
+    if accmodel == 'model1':
+        # Sophie's model:
+        ### compute Mdot_BH term
+        Mdot_bh_quasar = f_bh * M_ism / (tdyn_ism*1e9) #Msun/yr
+        #Calculate auxiliary quants for radio mode
+        temp = T0_val
+        cool_func = coolfunc([redshift,log_Zcgm,np.log10(T0_val),np.log10(n0_val*rff**alpha_n)])[0] # erg/s * cm**3
+        # print("Redshift is %.3f" %redshift)
+        # print("Cool func is %.1e" %cool_func)
+        if cool_func > 0:
+            Mdot_bh_radio = kappa_bh * 15./16. * G * np.pi * const_mp_cgs * 0.59 * np.pi * (const_kB * temp) / cool_func * M_BH / yr_to_s #Msun/yr
+        else:
+            Mdot_bh_radio = 0.0
+        #mu=0.59, G in cm**3 / (g * s**2), kB in erg/K, m_p in g
+        Mdot_bh = Mdot_bh_quasar + Mdot_bh_radio    
+    
+    # bry's simple model just for comparison:
+    if accmodel == 'model2':
+        if Mvir > 7.38e10:
+            # bh accretion rate <-> sfr
+            mdotbh0 = 0.0001
+            alpha_mdotbh = 1.0
+            sigma_mdotbh = 0.5
+            Mdot_bh = 10**(np.log10(mdotbh0 * Mdot_sfr**(alpha_mdotbh) * 10**(sigma_mdotbh)))
+
+        else: 
+            Mdot_bh = 0
+    
+    
+    ############## BH feedback model (bry): ################
+    
+    Ledd = 1.26e38 * M_BH                     # erg/s, m_BH in Msun
+    # eddington mass accretion rate of BHs
+    eta = 0.1
+    Mdot_bh_edd = (Ledd / (eta * c**2)) * (yr_to_s/Msun_to_g)        # Msun/yr
+    f_edd = Mdot_bh / Mdot_bh_edd
+    
+    ### Select between 'model1' or 'model2' (others to be added)
+    fbmodel = 'model2'
+    
+    # Model 1:
+    if fbmodel == 'model1':
+        eta_radio = 0.1
+        Edot_bh = eta_radio * Mdot_bh * (Msun_to_g/yr_to_s) * c**2
+    
+    # Model 2:
+    if fbmodel == 'model2':
+        # Replicating TNG Mbh-dependent threshold btwn thermal+kinetic mode
+        chi_0 = 0.002
+        Mpiv = 1e7 #Msun
+        Beta = 2
+        X_max = 0.1
+        X_crit = min( chi_0*(M_BH/Mpiv)**Beta, X_max )        # m_BH in Msun
+
+        # turn on kinetic winds if f_Edd dips below X_crit
+        if (Mdot_bh > 0) & (f_edd < X_crit):
+            ###############
+            # try: 
+            #Mdot_radioBH = 0. #Mdot_cool # == Mdot_cool from CGM to ISM
+            eta_fkin = 0.2
+            Edot_bh = eta_fkin * Mdot_bh * (Msun_to_g/yr_to_s)  * c**2
+        else:
+            Edot_bh = 0.
+            #Mdot_radioBH = 0.
+    
+    ############################################################
     
     ### compute Edot_out_halo and Mdot_out_halo terms 
     Ebind_cgm = evir_halo * M_cgm # erg
@@ -256,7 +315,7 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     Mdot_sfr_longlived = (1.0-f_recycle)*Mdot_sfr / yr_to_s # Msun/s
     Mdot_ism = (Mdot_cool - (1.0-f_recycle)*Mdot_sfr - Mdot_wind) / yr_to_s # Msun/s 
     Mdot_cgm = (Mdot_in_halo - Mdot_cool + Mdot_wind - Mdot_out_halo) / yr_to_s # Msun/s 
-    Edot_cgm_th = Edot_in_halo - Edot_cool + Edot_wind - Edot_out_halo # erg/s
+    Edot_cgm_th = Edot_in_halo - Edot_cool + Edot_wind - Edot_out_halo + Edot_bh # erg/s
     MZdot_star = MZdot_sfr / yr_to_s # Msun/s
     MZdot_ism = (MZdot_cool + MZdot_yield - MZdot_sfr - MZdot_wind) / yr_to_s # Msun/s
     MZdot_cgm = (MZdot_in_halo - MZdot_cool + MZdot_wind - MZdot_out_halo) / yr_to_s # Msun/s
