@@ -16,7 +16,6 @@ from astropy import constants as const
 from astropy import units as u
 from astropy.cosmology import Planck15 
 from scipy.integrate import simps, solve_ivp, trapz
-import random
 
 # define constants and unit conversions globally for this module 
 const_mp = const.m_p.to('Msun').value 
@@ -28,7 +27,6 @@ s_to_yr = u.s.to('yr')
 Msun_to_g = u.Msun.to('g') 
 f_b = Planck15.Ob0 / Planck15.Om0 # ~15 %
 G = const.G.to('cm**3 / (g * s**2)').value
-c = const.c.to('cm/s').value
 
 # define analytic functions to return n0 (density within Rvir) and T0 (temperature at Rvir) given state variables and assumed profile slopes
 # NOTE: this is temporarily here -- eventually will be moved to the relevant subgrid_recipes CGM module 
@@ -49,7 +47,7 @@ This should return the Mdot's at each timestep
 
 def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uvb_model,coolfunc):
     
-    # unpack the log10 state variables and raise to power 10
+    # unpack the log10 state variables and raise to power 10 
     M_star = 10**logy[0]
     M_ism = 10**logy[1]
     M_cgm = 10**logy[2]
@@ -57,7 +55,6 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     MZ_star = 10**logy[4]
     MZ_ism = 10**logy[5]
     MZ_cgm = 10**logy[6]
-    M_bh = 10**logy[7]  ## added by bry
     
     # also raise the log10(t/sec) to power of 10 and convert to Gyr for interpolation functions
     t_Gyr = 10**logt * s_to_yr * 1e-9 
@@ -142,7 +139,7 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     # assume this gas accretion brings in specific energy = evir_halo
     # f_prev will be computed and multiply both of these inflow rates AFTER we compute the halo energy outflow rate below
     Mdot_in_halo = f_UV * f_b * Mdot_in_dm # Msun/yr
-    Edot_in_halo = Mdot_in_halo * evir_halo / yr_to_s # erg/s
+    Edot_in_halo = Mdot_in_halo * evir_halo / yr_to_s # erg/s 
     
     ### compute Edot_cool and Mdot_cool terms
     # first get n0 for density profile and T0 for temperature profile (this can be done analytically)
@@ -198,7 +195,7 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     
     # March 2023 -- switch from parameterized vB back to parameterized etaE for computing Edot_wind 
     Edot_wind = etaE_ism * ((1e51/100.) * (Mdot_sfr/yr_to_s)) # erg/s
-    
+        
     ####### At z>8.989, no cooling tables so Mdot_cool = 0 hence M_ism can become negative (SFR still gets calculated e Mism/tdep)
     ## set Mdot_sfr = 0 and Mdot_wind = 0 otherwise ODE solver will try to accommodate this with crazy small timesteps
     # another hack: also enforce this when Mism < 1e3 and Mdot_cool=0.0 which happens at early times in the dwarfs
@@ -206,56 +203,6 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     #     Mdot_sfr = 0.0
     #     Mdot_wind = 0.0
     #     etaE_ism = 0.0
-    
-    ############## BH accretion: ################
-    if Mvir > 7.38e10:
-    # eddington luminosities of BHs
-        Ledd = 1.26e38 * M_bh                     # erg/s, m_BH in Msun
-        # eddington mass accretion rate of BHs
-        eta = 0.1
-        maccdot_edd = (Ledd / (eta * c**2)) * (yr_to_s/Msun_to_g)        # Msun/yr
-
-        # bh accretion rate <-> sfr
-        maccdotbh0 = 0.0001
-        alpha_maccdotbh = 1.0
-        sigma_maccdotbh = 0.5
-        seed = 8942
-        rng = np.random.default_rng(seed)
-        scatter = rng.normal(0, 0.1, size=1000)
-        Maccdot_bh = 10**(np.log10(maccdotbh0 * Mdot_sfr**(alpha_maccdotbh) * 10**(sigma_maccdotbh)))# + np.random.choice(scatter))
-
-        # Eddington ratio for a galaxy with a BH accretion rate of Maccdot_bh
-        f_edd = Maccdot_bh/maccdot_edd
-
-        # limit growth to eddington limit
-        if Maccdot_bh > maccdot_edd:
-            Maccdot_bh = maccdot_edd     # Msun/yr
-    else: 
-        Maccdot_bh = 0
-        f_edd = 0 
-    # Maccdot_bh = 0.001*Mdot_sfr / yr_to_s
-    
-    
-    
-    ############## BH feedback: ################
-    
-    eta_radio = 0.1
-    Edot_radioBH = eta_radio * Maccdot_bh * (Msun_to_g/yr_to_s) * c**2
-    
-    chi_0 = 0.002
-    Mpiv = 1e8 #Msun
-    Beta = 2
-    X_max = 0.1
-    X_crit = min( chi_0*(M_bh/Mpiv)**Beta, X_max )        # m_BH in Msun
-
-    # turn on kinetic winds if f_Edd dips below X_crit
-    if (Maccdot_bh > 0) & (f_edd < X_crit):
-        ###############
-        # try: 
-        Mdot_radioBH = 0. #Mdot_cool # == Mdot_cool from CGM to ISM
-    else:
-        Mdot_radioBH = 0.
-
     
     
     ### compute Edot_out_halo and Mdot_out_halo terms 
@@ -278,7 +225,7 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
         
     ##### New chemical evolution MZdot's 
     Zcgm = MZ_cgm / M_cgm # metal mass fraction of CGM (not normalized to solar and not log10)
-    Zism = MZ_ism / M_ism # metal mass fraction of ISM
+    Zism = MZ_ism / M_ism # metal mass fraction of ISM     
     
     MZdot_sfr = Zism*(1.0-f_recycle)*Mdot_sfr # new long-lived stellar mass has same metallicity as ISM
     MZdot_cool = Zcgm*Mdot_cool # metal inflow rate from CGM to ISM
@@ -290,23 +237,12 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     ### Finally combine and return the total derivatives for the state variables (in the same order as y)
     # FIRST: since the time array (hence dt) will be in sec, convert all of these to Msun/s and erg/s
     Mdot_sfr_longlived = (1.0-f_recycle)*Mdot_sfr / yr_to_s # Msun/s
-    Mdot_ism = (Mdot_cool - (1.0-f_recycle)*Mdot_sfr - Mdot_wind - Mdot_radioBH) / yr_to_s # Msun/s     #added by bry
-    Mdot_cgm = (Mdot_in_halo - Mdot_cool + Mdot_wind - Mdot_out_halo + Mdot_radioBH) / yr_to_s # Msun/s #added by bry
-    Edot_cgm_th = Edot_in_halo - Edot_cool + Edot_wind - Edot_out_halo + Edot_radioBH # erg/s           #added by bry
+    Mdot_ism = (Mdot_cool - (1.0-f_recycle)*Mdot_sfr - Mdot_wind) / yr_to_s # Msun/s 
+    Mdot_cgm = (Mdot_in_halo - Mdot_cool + Mdot_wind - Mdot_out_halo) / yr_to_s # Msun/s 
+    Edot_cgm_th = Edot_in_halo - Edot_cool + Edot_wind - Edot_out_halo # erg/s
     MZdot_star = MZdot_sfr / yr_to_s # Msun/s
     MZdot_ism = (MZdot_cool + MZdot_yield - MZdot_sfr - MZdot_wind) / yr_to_s # Msun/s
     MZdot_cgm = (MZdot_in_halo - MZdot_cool + MZdot_wind - MZdot_out_halo) / yr_to_s # Msun/s
-    Mdot_bh = Maccdot_bh / yr_to_s # Msun/s     # added by bry
-    
-    # added by bry: saving the physical units for the output, converting to Msun/yr
-    Mdot_sfr_longlived_o = Mdot_sfr_longlived * yr_to_s # Msun/s
-    Mdot_ism_o = Mdot_ism * yr_to_s # Msun/s     #added by bry
-    Mdot_cgm_o = Mdot_cgm * yr_to_s # Msun/s #added by bry
-    Edot_cgm_th_o = Edot_cgm_th * yr_to_s # erg/s           #added by bry
-    MZdot_star_o = MZdot_star * yr_to_s # Msun/s
-    MZdot_ism_o = MZdot_ism * yr_to_s # Msun/s
-    MZdot_cgm_o = MZdot_cgm * yr_to_s # Msun/s
-    Mdot_bh_o = Mdot_bh * yr_to_s # Msun/s     # added by bry
     
     # SECOND: since we are integrating log(state_variable) AND log(time), multiply RHS by 10**t[sec] / 10**state_variable
     #         thus these all become dimensionless logarithmic derivatives dlogX/dlogt
@@ -316,18 +252,16 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     Edot_cgm_th *= 10**logt / Eth_cgm
     MZdot_star *= 10**logt / MZ_star
     MZdot_ism *= 10**logt / MZ_ism
-    MZdot_cgm *= 10**logt / MZ_cgm  
-    Mdot_bh *= 10**logt / M_bh          # added by bry
+    MZdot_cgm *= 10**logt / MZ_cgm    
     
     if return_all == False: # only return list of derivatives for solve_ivp
         
-        return [Mdot_sfr_longlived, Mdot_ism, Mdot_cgm, Edot_cgm_th, MZdot_star, MZdot_ism, MZdot_cgm, Mdot_bh] # added by bry
+        return [Mdot_sfr_longlived, Mdot_ism, Mdot_cgm, Edot_cgm_th, MZdot_star, MZdot_ism, MZdot_cgm]
 
     elif return_all == True: # return a DICT of derivatives and all other properties for this time/state 
-        
 
         # June 5, 2023: remove storing rarr and halo_coolfunc which are radial arrays instead of floats -- these making saving outputs harder
-        return {'Mdot_sfr':Mdot_sfr,'Mdot_ism':Mdot_ism_o,'Mdot_cgm':Mdot_cgm_o,'Edot_cgm_th':Edot_cgm_th_o, 
+        return {'Mdot_sfr':Mdot_sfr,'Mdot_ism':Mdot_ism,'Mdot_cgm':Mdot_cgm,'Edot_cgm_th':Edot_cgm_th, 
                 'redshift':redshift,'Mdot_in_dm':Mdot_in_dm,'Mvir':Mvir,'Rvir':Rvir,'Vvir':Vvir,'log_Zcgm':log_Zcgm,
                 'NFW_c':NFW_c,'Tvir':Tvir,'evir_halo':evir_halo,'tdyn_halo':tdyn_halo,
                 'tdyn_ism':tdyn_ism,'tdep_ism':tdep_ism,'etaM_ism':etaM_ism,'Mfilt':Mfilt,
@@ -338,10 +272,10 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
                 'Edot_out_halo':Edot_out_halo,'Mdot_out_halo':Mdot_out_halo,'cosmic_age':t_Gyr,
                 'M_star':M_star,'M_ism':M_ism,'M_cgm':M_cgm,'Eth_cgm':Eth_cgm,'MZ_star':MZ_star,'MZ_ism':MZ_ism,'MZ_cgm':MZ_cgm,
                 'Delta_Ecgm':Delta_Ecgm,'f_prev':f_prev,'NFW_vcirc':NFW_vcirc,'etaE_ism':etaE_ism,'etaZ_ism':etaZ_ism,
-                'MZdot_star':MZdot_star_o,'MZdot_ism':MZdot_ism_o,'MZdot_cgm':MZdot_cgm_o,
+                'MZdot_star':MZdot_star,'MZdot_ism':MZdot_ism,'MZdot_cgm':MZdot_cgm,
                 'MZdot_sfr':MZdot_sfr,'MZdot_yield':MZdot_yield,'MZdot_cool':MZdot_cool,'MZdot_wind':MZdot_wind,
                 'MZdot_in_halo':MZdot_in_halo,'MZdot_out_halo':MZdot_out_halo,
-                'Zcgm':Zcgm,'Zism':Zism,'Zin_halo':Zin_halo,'M_bh':M_bh,'Mdot_bh':Mdot_bh_o}    # added by bry
+                'Zcgm':Zcgm,'Zism':Zism,'Zin_halo':Zin_halo}    
 
         
         
@@ -407,9 +341,8 @@ def integrator(halo_data,parameters,parameter_functions,uvb_model,coolfunc,t_ste
     Mstar_init = 1. # arbitrary small number
     Mism_init = 1. # arbitrary small number
     Z_init = 1e-4 * 0.02 # assume initial metallicity is 1E-4/Zsun, multiply initial masses by this factor to get initial metal *mass*
-    Mbh_init = 1e6       # added by bry
 
-    initial_conditions = np.log10([Mstar_init,Mism_init,Mcgm_init,Ecgm_init/2.,Z_init*Mstar_init,Z_init*Mism_init,Z_init*Mcgm_init,Mbh_init])          # added by bry
+    initial_conditions = np.log10([Mstar_init,Mism_init,Mcgm_init,Ecgm_init/2.,Z_init*Mstar_init,Z_init*Mism_init,Z_init*Mcgm_init])
 
     #### tolerances
     # just choose reasonably small ones based on experimentation -- rtol gives requested error on exponent of variables, atol relevant for early evolution
