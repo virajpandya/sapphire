@@ -251,7 +251,7 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     ### Finally combine and return the total derivatives for the state variables (in the same order as y)
     # FIRST: since the time array (hence dt) will be in sec, convert all of these to Msun/s and erg/s
     Mdot_sfr_longlived = (1.0-f_recycle)*Mdot_sfr / yr_to_s # Msun/s
-    Mdot_ism = (Mdot_cool - (1.0-f_recycle)*Mdot_sfr - Mdot_wind) / yr_to_s # Msun/s 
+    Mdot_ism = (Mdot_cool - (1.0-f_recycle)*Mdot_sfr - Mdot_wind - Mdot_bh) / yr_to_s # Msun/s 
     Mdot_cgm = (Mdot_in_halo - Mdot_cool + Mdot_wind - Mdot_out_halo) / yr_to_s # Msun/s 
     Edot_cgm_th = Edot_in_halo - Edot_cool + Edot_wind - Edot_out_halo # erg/s
     MZdot_star = MZdot_sfr / yr_to_s # Msun/s
