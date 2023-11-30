@@ -88,6 +88,7 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     f_bh = parameters['f_bh']
     kappa_bh = parameters['kappa_bh']    
     return_all = parameters['return_all']
+    etaE_BH = parameters['etaE_BH']   # added by bry
     
     # unpack tree_interpolators (note the order of the returned list elements in read_trees/interpolate_trees.py module)
     interp_redshift, interp_logMAR, interp_logMvir, interp_logRvir, interp_logVvir, interp_logcNFW = tree_interpolators    
@@ -212,12 +213,12 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     ############## BH accretion model: ################
     
     ### Select between 'model1' (Sophie's) or 'model2' (bry's Mdotbh~sfr)
-    accmodel = 'model2'
+    accmodel = 'model1'
     
     if accmodel == 'model1':
         # Sophie's model:
         ### compute Mdot_BH term
-        Mdot_bh_quasar = f_bh * M_ism / (tdyn_ism*1e9) #Msun/yr
+        Mdot_bh_quasar = f_bh * Mdot_sfr #M_ism / (tdyn_ism*1e9) #Msun/yr
         #Calculate auxiliary quants for radio mode
         temp = T0_val
         cool_func = coolfunc([redshift,log_Zcgm,np.log10(T0_val),np.log10(n0_val*rff**alpha_n)])[0] # erg/s * cm**3
@@ -228,7 +229,7 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
         else:
             Mdot_bh_radio = 0.0
         #mu=0.59, G in cm**3 / (g * s**2), kB in erg/K, m_p in g
-        Mdot_bh = Mdot_bh_quasar + Mdot_bh_radio    
+        Mdot_bh = Mdot_bh_quasar + Mdot_bh_radio
     
     # bry's simple model just for comparison:
     if accmodel == 'model2':
@@ -256,8 +257,7 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     
     # Model 1:
     if fbmodel == 'model1':
-        eta_radio = 0.1
-        Edot_bh = eta_radio * Mdot_bh * (Msun_to_g/yr_to_s) * c**2
+        Edot_bh = etaE_BH * Mdot_bh * (Msun_to_g/yr_to_s) * c**2
     
     # Model 2:
     if fbmodel == 'model2':
@@ -268,13 +268,12 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
         X_max = 0.1
         X_crit = min( chi_0*(M_BH/Mpiv)**Beta, X_max )        # m_BH in Msun
 
-        # turn on kinetic winds if f_Edd dips below X_crit
+        # turn on kinetic winds if f_Edd dips below X_crit (TNG Mbh threshold for kinetic winds turning on)
         if (Mdot_bh > 0) & (f_edd < X_crit):
             ###############
             # try: 
             #Mdot_radioBH = 0. #Mdot_cool # == Mdot_cool from CGM to ISM
-            eta_fkin = 0.2
-            Edot_bh = eta_fkin * Mdot_bh * (Msun_to_g/yr_to_s)  * c**2
+            Edot_bh = etaE_BH * Mdot_bh * (Msun_to_g/yr_to_s)  * c**2
         else:
             Edot_bh = 0.
             #Mdot_radioBH = 0.
