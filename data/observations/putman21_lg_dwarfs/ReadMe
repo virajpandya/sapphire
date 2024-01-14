@@ -1,0 +1,280 @@
+J/ApJ/913/53 Gas content of the dwarf gal. within 2Mpc of the MW (Putman+, 2021)
+================================================================================
+The gas content and stripping of local group dwarf galaxies.
+    Putman M.E., Zheng Y., Price-Whelan A.M., Grcevich J., Johnson A.C.,
+    Tollerud E., Peek J.E.G.
+   <Astrophys. J., 913, 53 (2021)>
+   =2021ApJ...913...53P
+================================================================================
+ADC_Keywords: Galaxies, nearby; H I data; Intergalactic medium
+Keywords: Local Group ; Dwarf galaxies ; Galaxy quenching ;
+          Circumgalactic medium ; Interstellar medium ;
+          Intergalactic medium ; Andromeda Galaxy ; Milky Way Galaxy
+
+Abstract:
+    The gas content of the complete compilation of Local Group dwarf
+    galaxies (119 within 2Mpc) is presented using HI survey data. Within
+    the virial radius of the Milky Way (224kpc here), 53 of 55 dwarf
+    galaxies are devoid of gas to limits of M_HI_<10^4^M_{sun}_. Within
+    the virial radius of M31 (266kpc), 27 of 30 dwarf galaxies are devoid
+    of gas (with limits typically <10^5^M_{sun}_). Beyond the virial radii
+    of the Milky Way and M31, the majority of the dwarf galaxies have
+    detected HI gas and HI masses higher than the limits. When the
+    relationship between gas content and distance is investigated using a
+    Local Group virial radius, more of the nondetected dwarf galaxies are
+    within this radius (85+/-1 of the 93 nondetected dwarf galaxies) than
+    within the virial radii of the Milky Way and M31. Using the Gaia
+    proper-motion measurements available for 38 dwarf galaxies, the
+    minimum gas density required to completely strip them of gas is
+    calculated. Halo densities between 10^-5^ and 5x10^-4^cm^-3^ are
+    typically required for instantaneous stripping at perigalacticon. When
+    compared to halo density with radius expectations from simulations and
+    observations, 80% of the dwarf galaxies with proper motions are
+    consistent with being stripped by ram pressure at Milky Way
+    pericenter. The results suggest that a diffuse gaseous galactic halo
+    medium is important in quenching dwarf galaxies, and that a Local
+    Group medium also potentially plays a role.
+
+File Summary:
+--------------------------------------------------------------------------------
+ FileName    Lrecl  Records  Explanations
+--------------------------------------------------------------------------------
+ReadMe          80        .  This file
+table1.dat     120      119  Dwarf galaxies within 2Mpc: positions and
+                              HI parameters
+table2.dat      74      119  Dwarf galaxies within 2Mpc: other parameters
+table3.dat     116       38  Median orbital parameters and halo densities
+--------------------------------------------------------------------------------
+
+See also:
+ I/345 : Gaia DR2 (Gaia Collaboration, 2018)
+ J/AJ/131/332     : Velocities of individual stars in NGC 205 (Geha+, 2006)
+ J/AJ/133/715     : Dwarf galaxies of the Local Group (Whiting+, 2007)
+ J/ApJ/675/201    : Radial velocities of stars near Leo I (Mateo+, 2008)
+ J/ApJ/758/11     : Bayesian distances to M31 satellites (Conn+, 2012)
+ J/AJ/144/134     : LITTLE THINGS survey of nearby dwarf gal. (Hunter+, 2012)
+ J/AJ/144/4       : Dwarf galaxies in the Local Group (McConnachie+, 2012)
+ J/AJ/145/101     : Updated nearby galaxy catalog (Karachentsev+, 2013)
+ J/MNRAS/445/2061 : Absorption in multiphase CGM (Liang+, 2014)
+ J/ApJ/809/146    : SDSS-DR8 isolated low-mass galaxies (Bradford+, 2015)
+ J/ApJ/812/158    : Leo P RR Lyrae candidates & cumulative SFH (McQuinn+, 2015)
+ J/A+A/594/A116   : HI4PI spectra and column density maps (HI4PI team+, 2016)
+ J/MNRAS/458/L59  : Draco II stars gi magnitude & RVs (Martin+, 2016)
+ J/ApJ/827/89     : HST imaging of Pisces A and B (Tollerud+, 2016)
+ J/A+A/585/A41    : EBHIS spectra and HI column density maps (Winkel+, 2016)
+ J/MNRAS/466/2006 : Phoenix dwarf galaxy RV and [Fe/H] catalog (Kacharov+, 2017)
+ J/A+A/607/A48    : AGN data and absorption-line measurements (Richter+, 2017)
+ J/A+A/612/A26    : Deep HI observations of Leo T with WSRT (Adams+, 2018)
+ J/A+A/616/A12    : Gaia DR2 sources in GC and dSph (Gaia Collaboration+, 2018)
+ J/MNRAS/479/5343 : Nearby dwarf galaxy in Magellanic bridge (Koposov+, 2018)
+ J/MNRAS/478/1611 : Local Volume H I Survey (LVHIS) (Koribalski+, 2018)
+ J/ApJS/234/2     : The GALFA-HI survey data release 2 (Peek+, 2018)
+ J/ApJ/863/89     : Gaia DR2 PMs of stars in MW satellites (Simon, 2018)
+ J/ApJ/879/22     : GALFA-HI search for local dwarf galaxies (Defelippis+, 2019)
+ J/ApJ/887/115    : Sp. of stars in Price-Whelan 1 association (Nidever+, 2019)
+ J/ApJ/875/77     : PMs of MW satellites with Gaia & DES (Pace+, 2019)
+ J/ApJS/240/15    : HST/COS UV obs. of low-z SDSS galaxy groups (Stocke+, 2019)
+ J/MNRAS/491/3496 : Andromeda XIX member stars (Collins+, 2020)
+ J/ApJ/900/9      : AMIGA: Circumgalactic Medium of Andromeda (Lehner+, 2020)
+ J/ApJ/892/137    : Spectroscopy of Grus II, Tuc IV and Tuc V (Simon+, 2020)
+ J/A+A/635/A152   : Tucana dSph galaxy spectroscopic dataset (Taibi+, 2020)
+
+Byte-by-byte Description of file: table1.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units    Label   Explanations
+--------------------------------------------------------------------------------
+   1- 17 A17    ---      Name    Dwarf galaxy name
+  19- 20 I2     ---    f_Name    ? Notes or flags on Name (1)
+  22- 23 I2     h        RAh     Hour of Right Ascension (J2000) (2)
+  25- 26 I2     min      RAm     Minute of Right Ascension (J2000)
+  28- 29 I2     s        RAs     Second of Right Ascension (J2000)
+  31- 31 A1     ---      DE-     Sign of the Declination (J2000) (2)
+  32- 33 I2     deg      DEd     Degree of Declination (J2000) (2)
+  35- 36 I2     arcmin   DEm     Arcminute of Declination (J2000)
+  38- 39 I2     arcsec   DEs     Arcsecond of Declination (J2000)
+  41- 44 I4     km/s     Vel     [-558/477]? Velocity
+  46- 49 I4     kpc      Dist    [22/1950] Distance
+  51- 55 F5.1   kpc    e_Dist    [0.4/205] Lower (or symmetric) uncertainty
+                                  in Dist
+  57- 59 I3     kpc    E_Dist    [5/152]? Upper uncertainty in Dist
+  61- 66 A6     ---      Data    Data (3)
+  68- 78 A11    ---      Method  Method (4)
+  80- 84 F5.1   mK       sigHI   [0.9/360]? 1{sigma} HI flux (5)
+  86- 86 A1     ---    l_MHI     Limit flag on MHI
+  88- 94 A7     Msun     MHI     HI mass
+  96-103 A8     Msun   e_MHI     Lower (or symmetric) uncertainty in MHI
+ 105-111 A7     Msun   E_MHI     Upper uncertainty in MHI
+ 113-114 I2     ---      rPos    [5/21] Reference for RA/DE positions (6)
+ 116-117 I2     ---    r_Vel     [5/27]? Reference for Vel (6)
+ 119-120 I2     ---    r_Dist    [5/18] Reference for Dist (6)
+--------------------------------------------------------------------------------
+Note (1): Notes or flags on Galaxy as follows:
+     8 = The limit is only for the core of this tidally extended galaxy;
+    11 = The limit is calculated with twice the median flux in the region of
+          the galaxy due to strong Galactic contamination (see text);
+    14 = Sculptor has been claimed as a detection in previous publications,
+          but the HI clouds are offset from the stellar position of the galaxy
+          and there is abundant surrounding emission at similar velocities;
+    19 = Fornax is at velocities that confuse any associated HI with
+          Galactic emission. The limit at the stellar position and velocity is
+          given;
+    20 = This galaxy is unlikely to exist based on observations by
+          Cantu+ (2021ApJ...916...81C);
+    22 = Phoenix has confusion with Galactic emission, but the HI cloud is
+          at the position and velocity of the stellar component;
+    24 = Lacerta I is Andromeda XXXI in McConnachie (2012, J/AJ/144/4);
+    25 = Perseus I is Andromeda XXXIII in McConnachie (2012, J/AJ/144/4);
+    26 = Cassiopeia III is Andromeda XXXII in McConnachie (2012, J/AJ/144/4).
+Note (2): In table 1, coordinates for Virgo I (12 00 10 +00 40 48) are very
+          likely a misprint for 12 00 10 -00 40 48 (see the discovery Paper;
+          Homma et al. 2016ApJ...832...21H); corrected at CDS.
+Note (3): HI data source as follows:
+    GALFA1 = GALFA-HI DR1, Peek et al. (2011ApJS..194...20P);
+    GALFA2 = GALFA-HI DR2, Peek et al. (2018, J/ApJS/234/2);
+    HI4PI  = HI4PI Collaboration et al. (2016, J/A+A/594/A116).
+Note (4):  Method as follows:
+    Res.        = sigHI was obtained with a method consistent with the source
+                   being resolved
+    Unres.      = sigHI was obtained with a method consistent with the source
+                   being unresolved
+    Unres. No V = the source does not have a velocity. Then the
+                   sigHI is an average from all of the channels without
+                   significant Galactic emission.
+
+    For HI4PI resolved, the sigHI values tend to be lower as they are the
+    standard deviation of the flux sum divided by the area of the optical
+    galaxy for 9 regions surrounding the galaxy (see text).
+Note (5): The HI mass is calculated using 5{sigma}, the noted distance, and
+    a fixed velocity width of 10km/s. The errors are from the distance
+    errors shown.
+Note (6): Positions, Vel and Dist references as follows:
+     5 = McConnachie (2012, J/AJ/144/4).
+     6 = Simon (2019ARA&A..57..375S);
+     7 = Luque et al. (2017MNRAS.468...97L) for the position;
+     9 = Koposov et al. (2018, J/MNRAS/479/5343) for the position;
+    10 = Torrealba et al. (2018MNRAS.475.5085T) for the position;
+    12 = Drlica-Wagner et al. (2016ApJ...833L...5D) for the position;
+    13 = Simon et al. (2020, J/ApJ/892/137) for the position and velocity;
+    15 = Homma et al. (2016ApJ...832...21H) for the position;
+    16 = Torrealba et al. (2016MNRAS.463..712T) for the position;
+    17 = Torrealba et al. (2016MNRAS.459.2370T) for the position;
+    18 = Torrealba et al. (2019MNRAS.488.2743T) for position, velocity and
+          distance;
+    21 = Homma et al. (2018PASJ...70S..18H) for the position;
+    23 = Martin et al. (2014ApJ...793L..14M);
+    27 = Bouchard et al. (2005AJ....130.2058B) found a velocity of 159km/s,
+          but we do not note that here as this could not be confirmed by
+          Westmeier+ (2017MNRAS.472.4832W) or
+          Koribalski+ (2018, J/MNRAS/478/1611). Koribalski+ (2018) find
+          emission with a similar flux and velocity width at 36km/s, so we
+          leave the HI mass.
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table2.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units   Label   Explanations
+--------------------------------------------------------------------------------
+   1- 17 A17    ---     Name    Dwarf galaxy name
+  19- 25 E7.1   Lsun    Lv      [86/1500000000]? Luminosity, solar units
+  27- 30 I4     pc      rh      [14/3065]? Half-light radius, parsecs
+  32- 32 A1     ---   l_sigma   Limit flag on sigma
+  34- 37 F4.1   km/s    sigma   [1.2/92]? Stellar velocity dispersion,
+                                 {sigma}_*_
+  39- 42 F4.1   km/s    sigma2  [7.2/61]? Gas velocity dispersion (7)
+  44- 47 I4     kpc     DMW     [19/1945] Distance from the center of Milky Way
+  49- 52 I4     kpc     DM31    [27/2209] Distance from the center of M31
+  54- 57 I4     kpc     DLG     [-271/1702] Distance from the Local Group
+                                 surface (8)
+  59- 61 I3     kpc     DLGh    [-9/56] DLG adjustment, MW mass higher (8)
+  63- 65 I3     kpc     DLGl    [-58/-3] DLG adjustment, MW mass lower (8)
+  67- 68 A2     ---   r_Lv      Reference for Lv (9)
+  70- 71 A2     ---   r_rh      Reference for rh (9)
+  73- 74 A2     ---   r_sigma   Reference for sigma (9)
+--------------------------------------------------------------------------------
+Note (7): When sigma2 ({sigma}_gas_) is noted it is derived directly from
+    the FWHM of the HI line.
+Note (8): This is the distance from the Local Group surface defined in
+    Section 3.1, while DMW and DM31 are from the center of the MW and M31.
+    The DLGh value is the variation on the distance from this surface when
+    the Milky Way mass is higher and the M31 mass is lower. The DLGl value
+    is when the Milky Way mass is lower and the M31 mass is higher. The
+    total Local Group mass remains the same in all cases.
+Note (9): Lv, rh and sigma references as follows:
+     5 = McConnachie (2012, J/AJ/144/4);
+     6 = Simon (2019ARA&A..57..375S);
+     7 = {sigma} is from Martin et al. (2016, J/MNRAS/458/L59);
+     8 = Properties are from Drlica-Wagner et al. (2016ApJ...833L...5D);
+     9 = {sigma} is from Carlin & Sand (2018ApJ...865....7C). No rh is given
+          since this galaxy is highly disrupted;
+    10 = {sigma} is from Simon et al. (2020, J/ApJ/892/137);
+    11 = rh is from Bothun & Thompson (1988AJ.....96..877B);
+    12 = The LMC has a very large stellar rotation component compared to the
+          stellar dispersion component. Using the stellar dispersion value
+          (20.2km/s), would lead to a severe underestimate of the total
+          mass, so we use the gas dispersion calculated from the FWHM of the
+          HI line;
+    13 = Properties are from Homma et al. (2016ApJ...832...21H);
+    14 = Properties are from Torrealba et al. (2019MNRAS.488.2743T);
+    15 = Properties are from Homma et al. (2018PASJ...70S..18H);
+    16 = {sigma}_*_ is from Kacharov et al. (2017, J/MNRAS/466/2006);
+    17 = {sigma}_*_ is from Martin et al. (2014ApJ...793L..14M);
+    18 = {sigma}_*_ is from Namumba et al. (2019MNRAS.490.3365N);
+    19 = rh is from Martin et al. (2016ApJ...824L...5M). {sigma}_*_ is from
+          Collins et al. (2020, J/MNRAS/491/3496);
+    20 = {sigma}_*_ is from Taibi et al. (2020, J/A+A/635/A152);
+    21 = {sigma}_*_ is from Sand et al. (2015ApJ...812L..13S);
+    22 = {sigma}_*_ is from Barnes et al. (2001MNRAS.322..486B);
+    23 = {sigma}_*_ is from Namumba et al. (2018MNRAS.478..487N);
+    24 = {sigma}_*_ is from Bernstein-Cooper et al. (2014AJ....148...35B).
+          rh in this case is the semi-major axis noted by
+          McQuinn+ (2015, J/ApJ/812/158);
+    25 = {sigma}_*_ is from Begum et al. (2005A&A...433L...1B);
+    26 = {sigma}_*_ is from Bouchard et al. (2005AJ....130.2058B) and is
+          consistent with the detection at the lower velocity by
+          Koribalski+ (2018, J/MNRAS/478/1611);
+    27 = {sigma}_*_ is from Koribalski et al. (2018MNRAS.478.1611K).
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table3.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units   Label       Explanations
+--------------------------------------------------------------------------------
+  1-  17 A17    ---     Name        Dwarf galaxy name
+      19 A1     ---   f_Name        Notes or flags on Name (1)
+ 21-  23 I3     kpc     rperi       [3/417] Dwarf galaxy perigalacticon
+ 25-  28 F4.1   kpc   E_rperi       [0.3/85] Upper uncertainty in rperi
+ 30-  34 F5.1   kpc   e_rperi       [0.3/115] Lower uncertainty in rperi
+ 36-  38 I3     km/s    vperi       [214/955] Dwarf galaxy velocity at
+                                     perigalacticon
+ 40-  42 I3     km/s  e_vperi       [9/471] Uncertainty in vperi
+ 44-  50 E7.1   cm-3    nhalo-peri  [3.5e-7/0.0009] Minimum MW halo gas density
+                                     (2)
+ 52-  59 E8.1   cm-3  E_nhalo-peri  [1e-6/0.0007] Upper uncertainty in
+                                     nhalo-peri
+ 61-  67 E7.1   cm-3  e_nhalo-peri  [3e-7/0.0004] Lower uncertainty in
+                                     nhalo-peri
+ 69-  72 I4     kpc     rapo        [37/3865] Dwarf galaxy apogalacticon
+ 74-  77 I4     kpc   E_rapo        [4/2033] Upper uncertainty in rapo
+ 79-  82 I4     kpc   e_rapo        [3/1814] Lower uncertainty in rapo
+ 84-  86 I3     km/s    vapo        [34/931] Dwarf galaxy velocity at
+                                     apogalacticon
+ 88-  90 I3     km/s  e_vapo        [5/482] Uncertainty in vapo
+ 92-  98 E7.1   cm-3    nhalo-apo   [9.3e-6/0.006] Minimum MW halo gas density
+                                     (2)
+100- 108 E9.1   cm-3  E_nhalo-apo   [6e-5/0.02] Upper uncertainty in nhalo-apo
+110- 116 E7.1   cm-3  e_nhalo-apo   [8.6e-6/0.004] Lower uncertainty in
+                                     nhalo-apo
+--------------------------------------------------------------------------------
+Note (1): Notes on individual galaxies as follows:
+    2 = This galaxy is not included in Figures 8 and 9 because of
+         its very small pericenter;
+    3 = Phoenix is the only dwarf galaxy in this list with gas.
+Note (2): This is the median MW halo gas density required to strip the dwarf
+           galaxy at perigalacticon/apogalacticon
+--------------------------------------------------------------------------------
+
+History:
+    From electronic version of the journal
+
+================================================================================
+(End)                    Prepared by [AAS], Emmanuelle Perret [CDS]  28-Nov-2022
