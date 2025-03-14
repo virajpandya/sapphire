@@ -1,3 +1,5 @@
+# MARTA's VERSION!
+
 """
 This module defines the ODE RHS function, initial conditions, and other associated specialized functions for the 
 general purely thermal model that Viraj adapted for JAX. 
@@ -15,7 +17,13 @@ import numpy as np
 from astropy import constants as const
 from astropy import units as u
 from astropy.cosmology import Planck15 
-from scipy.integrate import simps, solve_ivp, trapz
+from scipy.integrate import simpson, solve_ivp, trapezoid
+import scipy
+import random
+
+from astropy.io import fits
+from scipy import interpolate
+import os 
 
 # define constants and unit conversions globally for this module 
 const_mp = const.m_p.to('Msun').value 
@@ -29,6 +37,25 @@ Msun_to_g = u.Msun.to('g')
 f_b = Planck15.Ob0 / Planck15.Om0 # ~15 %
 G = const.G.to('cm**3 / (g * s**2)').value
 c = const.c.to('cm/s').value
+
+# # set the grid for BHAR-(M_star and redshift) dependence 
+# z_bottom = 0.05
+# z_top = 4.
+# logmstar_bottom = 9.5
+# logmstar_top = 12.
+# gridsize_mstar = 50 # the M bin size is 49
+# gridsize_z = 51 # the z bin size is 50
+# logmgrid_bound = np.linspace(logmstar_bottom, logmstar_top, gridsize_mstar)
+# logmgrid = (logmgrid_bound[:-1] + logmgrid_bound[1:]) / 2.
+# log1pzgrid_bound = np.linspace(np.log10(1. + z_bottom), np.log10(1. + z_top), gridsize_z)
+# log1pzgrid = (log1pzgrid_bound[:-1] + log1pzgrid_bound[1:]) / 2.
+
+# # load the median logBHAR map
+# # first get the absolute path to the wiersma09 data subdirectory
+# path_abs = os.path.dirname(os.path.abspath(__file__)) # absolute path of the directory containing this file (read_coolfunc.py)
+# path_bhar = os.path.join(path_abs,'main/maps_logbhar.fits') # absolute path to wiersma09 data subdirectory 
+# medmap_logbhar = fits.open(path_bhar)[0].data
+# interpfunc = interpolate.RegularGridInterpolator((logmgrid, log1pzgrid), medmap_logbhar.T, bounds_error = False, fill_value = None)
 
 # define analytic functions to return n0 (density within Rvir) and T0 (temperature at Rvir) given state variables and assumed profile slopes
 # NOTE: this is temporarily here -- eventually will be moved to the relevant subgrid_recipes CGM module 
@@ -58,6 +85,10 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     MZ_ism = 10**logy[5]
     MZ_cgm = 10**logy[6]
     M_BH = 10**logy[7]    
+
+    #adding bulge component
+    # M_bulge_star = 10**logy[8]
+    # M_bulge_gas = 10**logy[9]
     
     # also raise the log10(t/sec) to power of 10 and convert to Gyr for interpolation functions
     t_Gyr = 10**logt * s_to_yr * 1e-9 
@@ -123,10 +154,10 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     tdyn_ism = rff*Rvir / (NFW_vcirc * 1e5*cm_to_kpc / (s_to_yr*1e-9)) # Gyr
     
     # get SF and ISM wind scalings from FIRE 
-    tdep_ism = get_tdep(Vvir,redshift,A=tdep_A,alpha0=tdep_alpha0,alphaz=tdep_alphaz,beta=tdep_beta) # Gyr 
-    etaM_ism = get_etaM_ism(Vvir,redshift,A=etaM_A,alpha0=etaM_alpha0,alphaz=etaM_alphaz,beta=etaM_beta) # dimensionless
-    etaE_ism = get_etaE_ism(Vvir,redshift,A=etaE_A,alpha0=etaE_alpha0,alphaz=etaE_alphaz,beta=etaE_beta) # dimensionless    
-    etaZ_ism = get_etaZ_ism(Vvir,redshift,A=etaZ_A,alpha0=etaZ_alpha0,alphaz=etaZ_alphaz,beta=etaZ_beta) # dimensionless    
+    tdep_ism = get_tdep(Vvir,redshift)#,A=tdep_A,alpha0=tdep_alpha0,alphaz=tdep_alphaz,beta=tdep_beta) # Gyr 
+    etaM_ism = get_etaM_ism(Vvir,redshift)#,A=etaM_A,alpha0=etaM_alpha0,alphaz=etaM_alphaz,beta=etaM_beta) # dimensionless
+    etaE_ism = get_etaE_ism(Vvir,redshift)#,A=etaE_A,alpha0=etaE_alpha0,alphaz=etaE_alphaz,beta=etaE_beta) # dimensionless    
+    etaZ_ism = get_etaZ_ism(Vvir,redshift)#,A=etaZ_A,alpha0=etaZ_alpha0,alphaz=etaZ_alphaz,beta=etaZ_beta) # dimensionless    
 
     # new FIRE Zdot/Mdot scalings for chemical evolution modeling
     Zin_halo = get_Zin_halo(Vvir,redshift) # dimensionless Zdot/Mdot (*not* normalized to Zsun)
@@ -157,45 +188,24 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     # now construct density and temperature profiles
     n_rarr = n0_val * rarr**alpha_n # cm**-3        
     T_rarr = T0_val * rarr**alpha_T # K
-    
+
+    # print(T0_val)
+
     # get cooling function value in each spherical shell
-    # NOTE: this should be modularized depending on cooling function interpolator being used     
+    #NOTE: this should be modularized depending on cooling function interpolator being used     
     halo_coolfunc = coolfunc([[redshift,
                                log_Zcgm,
                                np.log10(Tval),
-                               np.log10(nval)] for (Tval,nval) in list(zip(T_rarr,n_rarr))]) # erg/s * cm**3
+                               np.log10(nval)] for (Tval,nval) in list(zip(T_rarr,n_rarr))]) # erg/s * cm**3  ###for Wiersma
 
+    # halo_coolfunc = np.array([10**coolfunc([np.log10(Tval),log_Zcgm]).item() for Tval in T_rarr]) # erg/s * cm**3 ###for Sutherland & Dopita
+    
     # compute # of shells with net cooling i.e., Lambda>0 just for bookkeeping
     ind_cool = np.where(halo_coolfunc>0)[0]     
     
-    # compute the Edot_cool integral, being careful with units (negative Edot_cool is OK, just means net heating)
-    Edot_cool = trapz(y=4*np.pi*(rarr*Rvir*kpc_to_cm)**2*(n_rarr)**2*halo_coolfunc,x=rarr*Rvir*kpc_to_cm) # erg/s    
-    
-    # ### Prevent stiff early blow-up -- no net heating: 
-    # if Edot_cool < 0:
-    #     Edot_cool = 0.0
-    
-    # if Edot_cool<=0, set cooling/accretion timescales to infinity and Mdot_cool = 0
-    if Edot_cool <= 0:
-        tcool_eff = np.inf
-        tff_eff = np.inf
-        t_accrete = np.inf        
-        Mdot_cool = 0.0
-    else: 
-        # compute an effective tcool as Energy_cgm / Edot_cool
-        tcool_eff = (Eth_cgm / Edot_cool)*s_to_yr*1e-9 # Gyr    
-        
-        # compute effective free-fall time at pre-defined radius rff 
-        tff_eff = (rff*Rvir*kpc_to_cm*1e-5 / NFW_vcirc)*s_to_yr*1e-9 # Gyr        
-        
-        # compute Mdot_cool as M_cgm / t_accrete where t_accrete = tcool,eff + tff,eff
-        t_accrete = tcool_eff + tff_eff # Gyr
-        Mdot_cool = M_cgm / (t_accrete*1e9) # Msun/yr        
-    
-    
     ### compute SFR term
     Mdot_sfr = M_ism / (tdep_ism*1e9) # Msun/yr
-    
+
     ### compute Mdot_wind and Edot_wind terms
     Mdot_wind = etaM_ism * Mdot_sfr # Msun/yr
     
@@ -212,36 +222,45 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     
     ############## BH accretion model: ################
     
-    ### Select between 'model1' (Sophie's) or 'model2' (bry's Mdotbh~sfr)
-    accmodel = 'model1'
+    #choose quasar and radio accretion model
+    quasar_accmodel = 'model_Y17'
+    radio_accmodel = 'bondi_density_extrapolate'
     
-    if accmodel == 'model1':
+    
+    #Yang 2017 quasar accretion model
+    if quasar_accmodel == 'model_Y17':
         # Sophie's model:
-        ### compute Mdot_BH term
-        Mdot_bh_quasar = f_bh * Mdot_sfr #M_ism / (tdyn_ism*1e9) #Msun/yr
-        #Calculate auxiliary quants for radio mode
+        Mdot_bh_quasar = 10**(0.22*np.log10(Mdot_sfr) + 1.16*np.log10(M_star) - 14.6)
+
+    #maximum cooling flow radio accretion model
+    if radio_accmodel == 'max_cool_flow':
         temp = T0_val
-        cool_func = coolfunc([redshift,log_Zcgm,np.log10(T0_val),np.log10(n0_val*rff**alpha_n)])[0] # erg/s * cm**3
-        # print("Redshift is %.3f" %redshift)
-        # print("Cool func is %.1e" %cool_func)
+        cool_func = coolfunc([redshift,log_Zcgm,np.log10(T0_val),np.log10(n0_val*rff**alpha_n)])[0]
         if cool_func > 0:
-            Mdot_bh_radio = kappa_bh * 15./16. * G * np.pi * const_mp_cgs * 0.59 * np.pi * (const_kB * temp) / cool_func * M_BH / yr_to_s #Msun/yr
+            Mdot_bh_radio = kappa_bh * 15./16. * G * np.pi * const_mp_cgs * 0.59 * (const_kB * temp) / cool_func * M_BH * yr_to_s #Msun/yr
         else:
             Mdot_bh_radio = 0.0
-        #mu=0.59, G in cm**3 / (g * s**2), kB in erg/K, m_p in g
-        Mdot_bh = Mdot_bh_quasar + Mdot_bh_radio
-    
-    # bry's simple model just for comparison:
-    if accmodel == 'model2':
-        if Mvir > 7.38e10:
-            # bh accretion rate <-> sfr
-            mdotbh0 = 0.0001
-            alpha_mdotbh = 1.0
-            sigma_mdotbh = 0.5
-            Mdot_bh = 10**(np.log10(mdotbh0 * Mdot_sfr**(alpha_mdotbh) * 10**(sigma_mdotbh)))
 
-        else: 
-            Mdot_bh = 0
+    #bondi with extrapolating density to Bondi radius radio accretion model
+    if radio_accmodel == 'bondi_density_extrapolate':
+        temp = T0_val
+        cs = np.sqrt((const_kB * temp) / (const_mp_cgs * 0.59)) #cm/s (speed of sound)
+        r_bondi = 2.0 * G * M_BH * Msun_to_g / cs**2 #cm (bondi radius)
+        n_bondi = n0_val * (r_bondi/(Rvir * kpc_to_cm))**alpha_n # cm**-3 (density at bondi radius)
+        rho_bondi = n_bondi * const_mp_cgs * 0.59
+        Mdot_bh_radio = 0.1 * np.pi * (G*M_BH * Msun_to_g)**2 * rho_bondi / cs**3 * yr_to_s / Msun_to_g
+        # print("here")
+
+    #bondi accretion with broken density law (density(Bondi)=density(ISM)) radio accretion model
+    if radio_accmodel == 'bondi_density_flat':
+        temp = T0_val
+        cs = np.sqrt((const_kB * temp) / (const_mp_cgs * 0.59)) #cm/s (speed of sound)
+        r_bondi = 2.0 * G * M_BH * Msun_to_g / cs**2 #cm (bondi radius)
+        n_bondi = n0_val * 0.01**alpha_n # cm**-3 (density at ISM radius)
+        rho_bondi = n_bondi * const_mp_cgs * 0.59
+        Mdot_bh_radio = 4.0 * np.pi * (G*M_BH * Msun_to_g)**2 * rho_bondi / cs**3 * yr_to_s / Msun_to_g
+
+    Mdot_bh = Mdot_bh_quasar + Mdot_bh_radio
     
     
     ############## BH feedback model (bry): ################
@@ -253,32 +272,120 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     f_edd = Mdot_bh / Mdot_bh_edd
     
     ### Select between 'model1' or 'model2' (others to be added)
-    fbmodel = 'model2'
+    fbmodel = 'tng'
     
     # Model 1:
-    if fbmodel == 'model1':
+    if fbmodel == 'simple':
         Edot_bh = etaE_BH * Mdot_bh * (Msun_to_g/yr_to_s) * c**2
     
     # Model 2:
-    if fbmodel == 'model2':
+    if fbmodel == 'tng':
         # Replicating TNG Mbh-dependent threshold btwn thermal+kinetic mode
         chi_0 = 0.002
         Mpiv = 1e7 #Msun
-        Beta = 2
+        Beta = 2.0
         X_max = 0.1
         X_crit = min( chi_0*(M_BH/Mpiv)**Beta, X_max )        # m_BH in Msun
+
+        L_bh_quasar = 0.0
+        L_bh_radio = 0.0
+        etaE_bh_jet = 0.0
+        etaE_bh_wind = 0.0
+        Edot_bh_quasar_fb = 0.0
+        Mdot_bh_quasar_fb = 0.0
+        Edot_bh_radio_fb = 0.0
+        Mdot_bh_radio_fb = 0.0
+        
+        etaE_BH = 0.02
 
         # turn on kinetic winds if f_Edd dips below X_crit (TNG Mbh threshold for kinetic winds turning on)
         if (Mdot_bh > 0) & (f_edd < X_crit):
             ###############
             # try: 
             #Mdot_radioBH = 0. #Mdot_cool # == Mdot_cool from CGM to ISM
-            Edot_bh = etaE_BH * Mdot_bh * (Msun_to_g/yr_to_s)  * c**2
+            Edot_bh_fb = etaE_BH * Mdot_bh * (Msun_to_g/yr_to_s)  * c**2
+            Mdot_bh_fb = etaM_BH * Mdot_bh * (Msun_to_g/yr_to_s)  * c**2
+            
         else:
-            Edot_bh = 0.
-            #Mdot_radioBH = 0.
+            Edot_bh_fb = 0.0
+            Mdot_bh_fb = 0.0
+    
+    if fbmodel == 'fiducial': #wind and jet in mass and energy + threshold
+        # luminosity efficiency - assuming 0 for now for both modes.
+        eps_wind = 0.0
+        eps_jet = 0.0
+        
+        # luminosity of the disk from 2 modes
+        L_bh_quasar = eps_wind * Mdot_bh_quasar * c**2 * (Msun_to_g/yr_to_s) #erg/s
+        L_bh_radio = eps_jet * Mdot_bh_radio * c**2 * (Msun_to_g/yr_to_s) #erg/s
+        L_bh = L_bh_quasar + L_bh_radio
+
+
+        ##############################################
+        #mass/energy feedback in wind mode
+        
+        # # Somerville SC-SAM version:
+        # v_esc = (2 * G * M_star * Msun_to_g / (0.1*Rvir*kpc_to_cm))**0.5
+        # Mdot_bh_quasar_fb = etaM_bh_wind * Mdot_bh_quasar * (eps_wind * c / v_esc)
+
+        # Choi et al. version:
+        esp_w = 5e-3
+        v_w = 1e9
+        # psi = 9.0
+        psi = (2.0*eps_w*c**2)/(v_w**2) #link this to accretion rate
+        etaE_bh_wind = 0.0
+        
+        Mdot_bh_quasar_fb = (psi/(1.0+psi)) * Mdot_bh_quasar
+        Edot_bh_quasar_fb = eps_w * (1.0/(1.0+psi)) * Mdot_bh_quasar * c**2 * (Msun_to_g/yr_to_s) #erg/s
+
+
+        ##############################################
+        # mass/energy feedback in jet mode
+        
+        etaM_bh_jet = 0.0 # assuming no mass outflow from jets
+        Mdot_bh_radio_fb = etaM_bh_jet * Mdot_bh_radio
+        
+        etaE_bh_jet =(10**(1.2*np.log10(M_BH) - 10.9))/3.
+        Edot_bh_radio_fb = etaE_bh_jet * Mdot_bh_radio * c**2 * (Msun_to_g/yr_to_s) #erg/s
+
+        # adding radio + quasar mode together
+        Mdot_bh_fb = Mdot_bh_radio_fb + Mdot_bh_quasar_fb
+        Edot_bh_fb = Edot_bh_radio_fb + Edot_bh_quasar_fb
+        
     
     ############################################################
+
+    # compute the Edot_cool integral, being careful with units (negative Edot_cool is OK, just means net heating)
+    Edot_cool = trapezoid(y=4*np.pi*(rarr*Rvir*kpc_to_cm)**2*(n_rarr)**2*halo_coolfunc,x=rarr*Rvir*kpc_to_cm) # erg/s   
+
+    ### a new piece of code (cooling energy is affected by feedback directly, which prevents accretion of cold gas)
+    f_Mdotcool_prev = 0.1 #0.03  # ie, the fraction of Edot_bh_fb that prevents Mdot_cool. Maybe needs a better name...
+    Edot_cool_eff = Edot_cool - f_Mdotcool_prev*Edot_bh_fb
+
+    #print(Edot_cool, Edot_cool_eff, Eth_cgm/tdyn_halo)
+  
+    if Edot_cool_eff > Eth_cgm / (tdyn_halo * yr_to_s * 10**9): ### new rate limiter
+        Edot_cool_eff = Eth_cgm / (tdyn_halo * yr_to_s * 10**9)
+    
+    # if Edot_cool<=0, set cooling/accretion timescales to infinity and Mdot_cool = 0
+    if Edot_cool_eff <= 0:
+        tcool_eff = np.inf
+        tff_eff = np.inf
+        t_accrete = np.inf        
+        Mdot_cool = 0.0
+    else: 
+        # compute an effective tcool as Energy_cgm / Edot_cool
+        tcool_eff = (Eth_cgm / Edot_cool_eff)*s_to_yr*1e-9 # Gyr
+        
+        # compute effective free-fall time at pre-defined radius rff 
+        tff_eff = (rff*Rvir*kpc_to_cm*1e-5 / NFW_vcirc)*s_to_yr*1e-9 # Gyr        
+        
+        # compute Mdot_cool as M_cgm / t_accrete where t_accrete = tcool,eff + tff,eff
+        t_accrete = tcool_eff + tff_eff # Gyr
+        Mdot_cool = M_cgm / (t_accrete*1e9) # Msun/yr        
+
+    # # #Viraj's addition (to fix sd93?)
+    # e_wind_halo = T0_val / Tvir   
     
     ### compute Edot_out_halo and Mdot_out_halo terms 
     Ebind_cgm = evir_halo * M_cgm # erg
@@ -311,14 +418,18 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     
     ### Finally combine and return the total derivatives for the state variables (in the same order as y)
     # FIRST: since the time array (hence dt) will be in sec, convert all of these to Msun/s and erg/s
-    Mdot_sfr_longlived = (1.0-f_recycle)*Mdot_sfr / yr_to_s # Msun/s
-    Mdot_ism = (Mdot_cool - (1.0-f_recycle)*Mdot_sfr - Mdot_wind) / yr_to_s # Msun/s 
-    Mdot_cgm = (Mdot_in_halo - Mdot_cool + Mdot_wind - Mdot_out_halo) / yr_to_s # Msun/s 
-    Edot_cgm_th = Edot_in_halo - Edot_cool + Edot_wind - Edot_out_halo + Edot_bh # erg/s
+    
+    #adding bulge component (subtract stars that go to bulge from disk)
+    #HOWEVER!!! I'm not sure if stars should be subtracted here. Is Mdot_sfr_longlived for the whole galaxy? Or is it for disk only? We use it to get M_star, and then I use M_star as the mass of the stars in the disk only. So from the way I currently use it, it should be disk-only stars, and then we should be subtracting thouse stars that go to the bulge.
+    Mdot_sfr_longlived = ((1.0-f_recycle)*Mdot_sfr) / yr_to_s # Msun/s
+    #adding bulge component (subtract gas that goes to bulge from ISM)
+    Mdot_ism = (Mdot_cool - (1.0-f_recycle)*Mdot_sfr - Mdot_wind - Mdot_bh_fb) / yr_to_s # Msun/s -
+    Mdot_cgm = (Mdot_in_halo - Mdot_cool + Mdot_wind - Mdot_out_halo) / yr_to_s # Msun/s +
+    Edot_cgm_th = Edot_in_halo - Edot_cool_eff + Edot_wind - Edot_out_halo + (1.0 - f_Mdotcool_prev) * Edot_bh_fb # erg/s
     MZdot_star = MZdot_sfr / yr_to_s # Msun/s
     MZdot_ism = (MZdot_cool + MZdot_yield - MZdot_sfr - MZdot_wind) / yr_to_s # Msun/s
     MZdot_cgm = (MZdot_in_halo - MZdot_cool + MZdot_wind - MZdot_out_halo) / yr_to_s # Msun/s
-    Mbhdot = Mdot_bh / yr_to_s #Msun/s    
+    Mbhdot = Mdot_bh / yr_to_s #Msun/s
     
     # SECOND: since we are integrating log(state_variable) AND log(time), multiply RHS by 10**t[sec] / 10**state_variable
     #         thus these all become dimensionless logarithmic derivatives dlogX/dlogt
@@ -333,7 +444,7 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
     
     if return_all == False: # only return list of derivatives for solve_ivp
         
-        return [Mdot_sfr_longlived, Mdot_ism, Mdot_cgm, Edot_cgm_th, MZdot_star, MZdot_ism, MZdot_cgm, Mbhdot]
+        return [Mdot_sfr_longlived, Mdot_ism, Mdot_cgm, Edot_cgm_th, MZdot_star, MZdot_ism, MZdot_cgm, Mbhdot] #adding bulge component
 
     elif return_all == True: # return a DICT of derivatives and all other properties for this time/state 
 
@@ -352,7 +463,12 @@ def evolve_galaxy(logt,logy,parameters,tree_interpolators,parameter_functions,uv
                 'MZdot_star':MZdot_star,'MZdot_ism':MZdot_ism,'MZdot_cgm':MZdot_cgm,
                 'MZdot_sfr':MZdot_sfr,'MZdot_yield':MZdot_yield,'MZdot_cool':MZdot_cool,'MZdot_wind':MZdot_wind,
                 'MZdot_in_halo':MZdot_in_halo,'MZdot_out_halo':MZdot_out_halo,
-                'Zcgm':Zcgm,'Zism':Zism,'Zin_halo':Zin_halo, 'Mbh_dot':Mbhdot*M_BH/10**logt,'M_BH':M_BH}    
+                'Zcgm':Zcgm,'Zism':Zism,'Zin_halo':Zin_halo, 'Mbh_dot':Mbhdot*M_BH/10**logt,'M_BH':M_BH, 'etaE_BH':etaE_BH,
+                'Mdot_bh_radio':Mdot_bh_radio, 'Mdot_bh_quasar':Mdot_bh_quasar, 
+                'Mdot_bh_fb':Mdot_bh_fb, 'Edot_bh_fb':Edot_bh_fb, 'etaE_bh_jet':etaE_bh_jet, 'etaE_bh_wind':etaE_bh_wind,
+                'L_bh_quasar':L_bh_quasar, 'L_bh_radio':L_bh_radio, 'Edot_bh_quasar':Edot_bh_quasar_fb, 'Edot_bh_radio':Edot_bh_radio_fb,
+                'Mdot_bh':Mdot_bh, 'Mdot_bh_edd':Mdot_bh_edd, 'Mdot_bh_radio_fb':Mdot_bh_radio_fb, 'Mdot_bh_quasar_fb':Mdot_bh_quasar_fb,
+                'f_edd':f_edd, 'Edot_cool_eff':Edot_cool_eff}    
 
         
         
@@ -366,7 +482,7 @@ def combine_outputs(sol,parameters,inputs):
     """    
     
     # first update parameters dict to return all requested properties computed by evolve_galaxy
-    parameters.update(return_all=True) 
+    parameters.update(return_all=True)
 
     # store the output dict for each set of [time,state_variables] in the sol object
     out_dicts = [evolve_galaxy(sol.t[tsol],sol.y[:,tsol],parameters,*inputs) for tsol in range(len(sol.t))]
@@ -418,9 +534,13 @@ def integrator(halo_data,parameters,parameter_functions,uvb_model,coolfunc,t_ste
     Mstar_init = 1. # arbitrary small number
     Mism_init = 1. # arbitrary small number
     Z_init = 1e-4 * 0.02 # assume initial metallicity is 1E-4/Zsun, multiply initial masses by this factor to get initial metal *mass*
-    M_BH_init = 1.0e5    
+    M_BH_init = 1.0e5   
 
-    initial_conditions = np.log10([Mstar_init,Mism_init,Mcgm_init,Ecgm_init/2.,Z_init*Mstar_init,Z_init*Mism_init,Z_init*Mcgm_init, M_BH_init])
+    #adding_bulge_component
+    # M_bulge_star_init = 1.
+    # M_bulge_gas_init = 1.
+
+    initial_conditions = np.log10([Mstar_init,Mism_init,Mcgm_init,Ecgm_init/2.,Z_init*Mstar_init,Z_init*Mism_init,Z_init*Mcgm_init, M_BH_init]) #adding bulge component
 
     #### tolerances
     # just choose reasonably small ones based on experimentation -- rtol gives requested error on exponent of variables, atol relevant for early evolution
@@ -440,7 +560,7 @@ def integrator(halo_data,parameters,parameter_functions,uvb_model,coolfunc,t_ste
     
     # print warning if integrator failed for this halo and return the normal dict structure but with sol_success = False
     if sol.status == -1:
-        #print('<!----- WARNING: solve_ivp completed BUT sol.status code = -1 (failed to integrate) for halo_name=%s'%halo_name)
+        print('<!----- WARNING: solve_ivp completed BUT sol.status code = -1 (failed to integrate) for halo_name=%s'%halo_name)
         # June 5, 2023: return time series of sol_success=False to enable dict comprehension later to filter these bad sols out        
         return {str(halo_name):{'sol_success':np.full(t_steps,False),'sol_object':sol}} # returning sol object if helpful for debugging
     # otherwise call my utility script to merge ALL outputs of ODE function and return normal dict structure for this halo
