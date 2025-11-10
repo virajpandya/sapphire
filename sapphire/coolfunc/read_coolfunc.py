@@ -10,6 +10,15 @@ from scipy.interpolate import RegularGridInterpolator, interp2d
 from glob import glob 
 import os 
 
+from astropy.cosmology import Planck15
+from astropy.table import Table
+from astropy import constants as const
+from astropy import units as u
+
+import jax.numpy as jnp
+from jax._src.third_party.scipy.interpolate import RegularGridInterpolator as jax_RegularGridInterpolator
+from jax import jit, grad, vmap, pmap, debug, jvp, vjp, jacrev, jacfwd, make_jaxpr, hessian, value_and_grad
+from jax_cosmo.scipy.interpolate import InterpolatedUnivariateSpline    
 
 
 def interpolate_wiersma09():
@@ -90,9 +99,30 @@ def interpolate_wiersma09():
 
 def interpolate_sd93():  
     
-    # when implementing, remember to make sure the call signature (inputs) to resulting coolfunc interpolator object is same as fiducial coolfunc_W09
+    # read the cooling table
+    # rows = temperature, columns = gas metallicities log(Z/Zsun), units = erg cm^3 / s
+    tcool = Table.read(os.path.join(os.path.dirname(os.path.abspath(__file__)),'data/newcool.dat'),
+                       format='ascii',
+                       names=('logT','-99','-3','-2','-1.5','-1.0','-0.5','0.0','0.5',))
+    # first convert tcool astropy Table into a 2D numpy array (this is the most elegant, easiest way I found to do this)
+    # NOTE: I omitted logZ=-99 to make interpolation easier since logZ=-99 (metal-free) is similar to logZ=-3 (extremely metal-poor)
+    arr_coolfunc = tcool.to_pandas().to_numpy(dtype='float')[:,2:]
+    # set up the (logT, logZ) meshgrid corresponding to each point in the 2D cooling function array
+    logT_bins = jnp.asarray(tcool['logT'])
+    logZ_bins = jnp.array(tcool.colnames[2:],dtype='float')
+    logT_mesh, logZ_mesh = jnp.meshgrid(logT_bins, logZ_bins) # for scatter plot 
     
-    raise NotImplementedError('viraj will implement the SD93 coolfunc soon')
+    # create linear 2D interpolator function (use 'nearest neighbor' extrapolation outside input range)
+    # coolfunc_sd93 = interp2d(logT_bins, logZ_bins, arr_coolfunc.T, kind='linear', fill_value=None) 
+    
+    # this seems better behaved for pairs (logT,logZ)
+    # July 7 -- change method from nearest to to linear to preserve gradient flow
+    rgi_sd93 = jit(jax_RegularGridInterpolator((logT_bins,logZ_bins),arr_coolfunc,method='linear',bounds_error=False,fill_value=None))
+    
+    ### test evaluation for a given (logT, logZcgm)
+    print(rgi_sd93((6.0,-1.0)),flush=True) # Lambda in erg*cm**3/s for CGM that has T=1e6 K and Zcgm=0.1Zsun everywhere
+
+    return rgi_sd93
 
 def interpolate_ploeckinger20(): 
     
@@ -108,7 +138,8 @@ def return_coolfunc(coolfunc_name):
     """
     
     if coolfunc_name == 'wiersma09': 
-        coolfunc = interpolate_wiersma09()
+        # coolfunc = interpolate_wiersma09()
+        raise NotImplementedError('needs to be jaxified')
         
     elif coolfunc_name == 'sd93': 
         coolfunc = interpolate_sd93()
