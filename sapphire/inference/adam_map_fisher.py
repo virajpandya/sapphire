@@ -1,4 +1,0 @@
-"""
-this module runs adam 
-
-"""

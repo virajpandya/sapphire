@@ -116,7 +116,8 @@ def get(config):
 
     sampling_config = config['sampling_config']
 
-    if config['runtype'] == 'single':
+    # both single and inference runtypes only evaluate a single parameter set at a time 
+    if config['runtype'] in ['single','inference']:
         return single_run(config)
     
     elif sampling_config['method'] == 'lhs':

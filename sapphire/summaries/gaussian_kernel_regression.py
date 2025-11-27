@@ -58,6 +58,39 @@ def extract_quantities(sol):
     return z0_Mvir, z0_smhm, fail_flag, Nfail, z0_Mstar, z0_fgas, z0_mzr
 
 
+### New function that pre-processes stuff we need as inputs for nadaraya_watson regression function
+### Haven't figured out way to avoid jax ConcretizationTypeError for jnp.arange -- doesn't need jit
+### This is only needed once for original mock truth or the observed scaling relations
+# @jit 
+def get_bandwidths(fail_flag, x_data):
+    ### x_data is usually z0_Mvir or z0_Mstar
+
+    ### first for rand batch
+    # April 28 -- to avoid failed solves
+    ind_success = jnp.where(fail_flag==0) # avoid any failed halos (whose values were set to -99 above)
+    
+    ### compute the gaussian kernal bandwidth from scott's rule and the spread of the logmvir distribution
+    scotts_factor = len(x_data[ind_success])**(-1./(1+4)) # note: we add 1 to 4 in exponent since nadaraya-watson is univariate regression 
+    std_xdata = jnp.std(x_data[ind_success])
+    prefac = 0.5 
+    bw_xdata = prefac * std_xdata * scotts_factor
+    
+    ### choose a couple x0 values at which to evaluate avg(y) and stderr(y)
+    # x0_logmvir = jnp.arange(10.0,12.4,0.1)
+    # x0 = jnp.arange(x_data[ind_success].min(),x_data[ind_success].max()+bw_xdata,bw_xdata)
+    # xmin, xmax = x_data[ind_success].min(), x_data[ind_success].max()
+    # xnum = jnp.ceil((xmax - xmin) / bw_xdata).astype(int)
+    # x0 = jnp.linspace(xmin,xmax,xnum)
+
+    # July 21 -- for better behaved regression, choose x0 based on ~5-95 percentiles of true Mvir and Mstar distribution
+    # otherwise can get gaussian bins/kernels at extreme low/high end of true distribution which can even make Fisher undefined at truth
+    # note: doesn't matter that jnp.percentile is non-differentiable --> we're just computing this once BEFORE beginning adam, HMC, etc. 
+    xmin, xmax = jnp.percentile(x_data[ind_success], jnp.array([1.0,99.0]))
+    x0 = jnp.arange(xmin,xmax+bw_xdata,bw_xdata)    
+
+    return bw_xdata, x0
+
+
 ### constant 1D gaussian kernel regression 
 @jit
 def nadaraya_watson(x_data, y_data, x0, bandwidth):
@@ -87,9 +120,40 @@ def nadaraya_watson(x_data, y_data, x0, bandwidth):
 @jit
 def local_linear(x_data, y_data, x0, bandwidth):
 
-    raise ValueError('not implemented yet')
+    raise NotImplementedError('not implemented yet')
 
 
+### first, a function that returns bandwidths, x0's and scaling relations for mock truth or observations that we will fit to
+# this does not need to be jitted, and cannot anyway due to get_bandwidths issue above
+def summarize_mock(sol):
+    """
+    yet to be added: forward model statistical uncertainties
+    """
 
+    # extract what we need
+    mock_z0_Mvir, mock_z0_smhm, mock_fail_flag, mock_Nfail, mock_z0_Mstar, mock_z0_fgas, mock_z0_mzr = extract_quantities(sol)
+    
+    # compute bandwidths and centers for gaussian kernels for mvir and mstar 
+    mock_bw_mvir, mock_x0_mvir = get_bandwidths(mock_fail_flag, mock_z0_Mvir)
+    mock_bw_mstar, mock_x0_mstar = get_bandwidths(mock_fail_flag, mock_z0_Mstar)
+
+    # do gaussian kernel regression 
+    mock_avg_smhm, mock_err_smhm = nadaraya_watson(mock_z0_Mvir, mock_z0_smhm, mock_x0_mvir, mock_bw_mvir)
+    mock_avg_fgas, mock_err_fgas = nadaraya_watson(mock_z0_Mstar, mock_z0_fgas, mock_x0_mstar, mock_bw_mstar)
+    mock_avg_mzr, mock_err_mzr = nadaraya_watson(mock_z0_Mstar, mock_z0_mzr, mock_x0_mstar, mock_bw_mstar)    
+
+    # NOTE: the return order should be same as expected by sapphire.inference modules (for the "obs_stats" collection)
+    return (mock_avg_smhm, mock_err_smhm,
+            mock_avg_fgas, mock_err_fgas,
+            mock_avg_mzr, mock_err_mzr,
+            mock_x0_mvir, mock_bw_mvir,mock_x0_mstar, mock_bw_mstar)
+
+
+    
+
+def summarize_obs():
+    raise NotImplementedError('not ported over yet')
+
+    
 
 #

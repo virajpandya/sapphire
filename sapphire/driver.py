@@ -57,8 +57,9 @@ def run(config):
     print('your requested config:\n',config,flush=True)
     
     # if multiple CPU cores requested, set environment flag (idiosyncrasy of jax on CPUs)
+    ### Can this now be done afterwards using jax_config below?
     if config['num_cpus'] > 1:
-        os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=50"
+        os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=%s"%config['num_cpus']
 
     ### now load jax
     # NOTE: there has to be a cleaner, compact way to load all of these jax packages up top... 
@@ -94,23 +95,17 @@ def run(config):
 
     integrator, saveat_fn = model.setup(config)
 
-    ### decide how to run: single fixed parameter set, sampling, or inference
+    ### decide how to run: single set of parameters or sampling many params simultaneously
     from sapphire.utils import setup_parameters 
 
     if config['runtype'] not in ['single','sampling','inference']:
         raise ValueError('config.runtype must be one of single, sampling or inference')
-
-    
-    elif config['runtype'] == 'single': 
-        # user requested only a single run with input fixed parameters, so turn them into the jnp.array with 10**A_X, etc.
-        # note: batch_solve above should have already been configured internally for this single-run mode 
-        param_samples = setup_parameters.get(config)
         
-    elif config['runtype'] == 'sampling':
-        # use requested sampling strategy to choose N samples of parameters
+    else:
+        # this module will automatically return params based on runtype
         param_samples = setup_parameters.get(config)
 
-    ### now set up the ODE solver
+    ### now set up the ODE solver to run on single parameter set or batched parameter set 
     if config['solver_config']['engine'] == 'diffrax':
         from sapphire.solvers import diffrax as solver
     else:
@@ -118,40 +113,136 @@ def run(config):
     
     batch_solve = solver.setup(config,integrator,saveat_fn,halo_matrix,halo_coeff_matrix,halo_tinit,ts_interp)
 
+    ### automatically run 
+    print('benchmarking batched ODE runtime for runtype=%s...'%config['runtype'],flush=True) 
+
     ### Finally solve the ODEs for single or multiple halos
     # this is clunky, can push the solve down to sapphire.solvers.diffrax itself, returning batch_solve only for inference later 
+    
+    tstart = timer()
+    sol = batch_solve(halo_index,param_samples)
+    print(sol.ys[0][0][0],flush=True)
+    print('initial jit+sol took %.3f sec'%(timer()-tstart),flush=True)
+    
+    tstart = timer()
+    sol = batch_solve(halo_index,param_samples)
+    print(sol.ys[0][0][0],flush=True)
+    print('jitted sol took %.3f sec'%(timer()-tstart),flush=True)
+
+    """ 
+    add module here to compress+save data directly for TSG/ILI 
+    """
+    
     if config['runtype'] in ['single','sampling']: 
-        print('solving ODEs for runtype=%s...'%config['runtype'],flush=True) 
-        
-        ### first for full batch without commenting out vmap
-        tstart = timer()
-        sol = batch_solve(halo_index,param_samples)
-        print(sol.ys[0][0][0],flush=True)
-        print('initial sol took %.3f sec'%(timer()-tstart),flush=True)
-        
-        tstart = timer()
-        sol = batch_solve(halo_index,param_samples)
-        print(sol.ys[0][0][0],flush=True)
-        print('jitted sol took %.3f sec'%(timer()-tstart),flush=True)
-        
-
+        print('returning sol...',flush=True)
+        return sol
+    
     ### alternatively run inference if requested
-    elif config['runtype'] in ['inference']:
+    ######### Can this whole thing be put into a sapphire.inference wrapper module to keep driver / __ clean?
+    if config['runtype'] in ['inference']: # can merge Lucas' ILI option in the future
 
+        inference_config = config['inference_config']
+
+        ### mock mode 
+        if inference_config['mock'] is True:
+
+            ### move this to sapphire.utils.setup_parameters
+            params_fixed_astro = config['params_fixed_astro']
+            params_bounds = config['sampling_config']['params_bounds']
+            params_free = list(params_bounds.keys())
+            true_params = jnp.array([params_fixed_astro[k] for k in params_free])
+            print('true mock parameters\n',true_params,flush=True)
+            
+            print('summarizing mock data...',flush=True)
+            import sapphire.summaries.gaussian_kernel_regression as gkr # can generalize later
+
+            # although these are mocks, we use the same obs_ prefix for consistency with rest of code below
+            # NOTE: return order of obs_stats is same order as expected by sapphire.inference module below
+            obs_stats = gkr.summarize_mock(sol)
+
+        """ otherwise add module to summarize input observations here """
+        ### obs_stats = gkr.summarize_obs(config) 
+        
+        print('setting up model for inference...',flush=True)
+
+        ### should push this down to sapphire.inference based on config, for explicit or ILI etc. 
+        from sapphire.inference import explicit_likelihood
+        loss_func, grad_loss_func, hess_loss_func = explicit_likelihood.setup(config,halo_index,obs_stats,batch_solve)
+
+        ### change this to also benchmark for non-mock (fitting obs)
+        ### and push this down to sapphire.utils or something 
+        if inference_config['mock'] is True:
+            tstart = timer()
+            true_loss = loss_func(true_params)
+            tjit_loss = timer()-tstart
+            
+            tstart = timer()
+            true_loss = loss_func(true_params)
+            tloss = timer()-tstart
+
+            print('[minibatched] true loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_loss,tjit_loss,tloss),flush=True)
+
+            tstart = timer()
+            true_grad_loss = grad_loss_func(true_params)
+            tjit_grad = timer()-tstart
+
+            tstart = timer()
+            true_grad_loss = grad_loss_func(true_params)
+            tgrad = timer()-tstart            
+            
+            print('[minibatched] true grad loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_grad_loss,tjit_grad,tgrad),flush=True)
+        
+        # params_bounds = config['sampling_config']['params_bounds']
+        # params_free = list(params_bounds.keys())
+
+        # print('param_samples\n',param_samples,flush=True)
+
+        # test_params = jnp.array([param_samples[0],param_samples[1],
+        #                          param_samples[4],param_samples[5],
+        #                          param_samples[8],param_samples[9],
+        #                          param_samples[12],param_samples[13]])
+
+        # test_params = test_params.at[0].set(jnp.log10(test_params[0]))
+        # test_params = test_params.at[2].set(jnp.log10(test_params[2]))
+        # test_params = test_params.at[4].set(jnp.log10(test_params[4]))
+        # test_params = test_params.at[6].set(jnp.log10(test_params[6]))        
+        
+        # print('test_params\n',test_params,flush=True)
+
+        
+        # test_params_dict = {params_free[i]:test_params[i] for i in range(len(params_free))}
+        # print('test_params_dict\n',test_params_dict,flush=True)
+
+        
+        # if inference_config['backend'] == 'numpyro':
+        #     test_loss = loss_func(test_params_dict)
+        #     test_grads = grad_loss_func(test_params_dict)
+        # elif inference_config['backend'] == 'manual':
+        #     test_loss = loss_func(test_params)
+        #     test_grads = grad_loss_func(test_params)
+        
+        # print('test_loss',test_loss,flush=True)
+        # print('test_grads\n',test_grads,flush=True)
+        
+        # return test_grads
+        
         if config['inference_config']['engine'] == 'adam':
-            print('calling adam for MAP+Fisher...')
+            print('calling adam for MAP+Fisher...',flush=True)
+
+            from sapphire.inference import run_adam
+            out_adam = run_adam.setup(config,loss_func,grad_loss_func)
 
         elif config['inference_config']['engine'] == 'hmc':
-            print('calling numpyro for HMC...')
+            print('calling numpyro for HMC...',flush=True)
 
         
         else:
-            raise ValueError('inference_config.engine must be either adam or hmc')
+            raise ValueError('inference_config.engine must be either adam or hmc',flush=True)
     
 
 
 
         
-    # print('Finished -- thank you for using sapphire!',flush=True)
+    print('Finished -- thank you for using sapphire!',flush=True)
 
     
