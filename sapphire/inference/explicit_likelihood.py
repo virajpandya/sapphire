@@ -31,7 +31,7 @@ from numpyro.infer import MCMC, NUTS, Predictive, AIES, ESS
 import sapphire.summaries.gaussian_kernel_regression as gkr
 
 
-def setup(config,halo_index,obs_stats,batch_solve):
+def setup(config,minibatch_halo_index,obs_stats,batch_solve):
 
     inference_config = config['inference_config']
     sampling_config = config['sampling_config']
@@ -56,9 +56,6 @@ def setup(config,halo_index,obs_stats,batch_solve):
     Lflag_mzr = inference_config['flag_mzr']   
 
     Nbatch = inference_config['Nbatch']
-
-    ### move this outside to utils or something, for driver.py benchmarking 
-    minibatch_halo_index = jax.random.choice(key(0), halo_index, (Nbatch,), replace=False)
 
     ### unpack input observed (or mock) summary statistics
     (obs_avg_smhm,obs_err_smhm,
@@ -169,6 +166,7 @@ def setup(config,halo_index,obs_stats,batch_solve):
     """ alternatively, the equivalent model in numpyro """
     
     # note: these input obs can be different from the obs_ ones returned above
+    # TO DO: move this to separate module, then just import the loss (with same call signature) 
     def model(obs_avg_smhm,obs_err_smhm,obs_avg_fgas,obs_err_fgas,obs_avg_mzr,obs_err_mzr):
         
         ### sample the free parameters assuming their respective Uniform priors 

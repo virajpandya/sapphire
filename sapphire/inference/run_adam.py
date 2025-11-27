@@ -143,7 +143,8 @@ def setup(config,loss_func,grad_loss_func):
         # return final_params, final_trace[:final_i]  # only return valid steps
         return final_i,final_params,final_trace_params,final_trace_loss,final_trace_grads,final_trace_updatenorm,final_trace_dlogL
 
-    
+
+    #### TO DO: clean this up... 
     if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) == 1:
         print('---------> sequential run_adam_while on CPU or single GPU',flush=True)
 

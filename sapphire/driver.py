@@ -44,6 +44,10 @@ def run(config):
     
     NOTE: at some point I plan to offload a lot of the if/else checks on the config dict to another module 
     """
+
+    # just to benchmark entire runtime from start to finish
+    tstart0 = timer()
+    
     
     # FIRST: parse the input config object (must be a dict or a string giving the path of config JSON file that will be converted to dict)
     # print('Parsing input config...',flush=True)
@@ -112,22 +116,24 @@ def run(config):
         raise ValueError('other diffeq solver engines are not yet implemented') 
     
     batch_solve = solver.setup(config,integrator,saveat_fn,halo_matrix,halo_coeff_matrix,halo_tinit,ts_interp)
-
+    
     ### automatically run 
-    print('benchmarking batched ODE runtime for runtype=%s...'%config['runtype'],flush=True) 
+    print('benchmarking full-batch ODE runtime for runtype=%s...'%config['runtype'],flush=True) 
 
     ### Finally solve the ODEs for single or multiple halos
     # this is clunky, can push the solve down to sapphire.solvers.diffrax itself, returning batch_solve only for inference later 
+
+    ### TO DO: remove this in favor of minibatched below? and/or can push down to future TSG/ILI module otherwise?
     
     tstart = timer()
     sol = batch_solve(halo_index,param_samples)
     print(sol.ys[0][0][0],flush=True)
-    print('initial jit+sol took %.3f sec'%(timer()-tstart),flush=True)
+    print('full-batch initial jit+sol took %.3f sec'%(timer()-tstart),flush=True)
     
     tstart = timer()
     sol = batch_solve(halo_index,param_samples)
     print(sol.ys[0][0][0],flush=True)
-    print('jitted sol took %.3f sec'%(timer()-tstart),flush=True)
+    print('full-batch jitted sol took %.3f sec'%(timer()-tstart),flush=True)
 
     """ 
     add module here to compress+save data directly for TSG/ILI 
@@ -141,24 +147,48 @@ def run(config):
     ######### Can this whole thing be put into a sapphire.inference wrapper module to keep driver / __ clean?
     if config['runtype'] in ['inference']: # can merge Lucas' ILI option in the future
 
+        from sapphire import inference
+        
         inference_config = config['inference_config']
 
+        params_fixed_astro = config['params_fixed_astro']
+        params_bounds = config['sampling_config']['params_bounds']
+        params_free = list(params_bounds.keys())
+
+        print('[minibatched] solving mock ODEs...',flush=True)
+        ### move this earlier -- maybe to read_trees or a utils module ?
+        minibatch_halo_index = jax.random.choice(jax.random.key(0), halo_index, (inference_config['Nbatch'],), replace=False)
+        
         ### mock mode 
+        ### push this down to sapphire.utils.setup_parameters 
+        
+        true_params = jnp.full(len(params_free),jnp.nan) # by default, there is no truth if not running in mock mode
+        
         if inference_config['mock'] is True:
 
-            ### move this to sapphire.utils.setup_parameters
-            params_fixed_astro = config['params_fixed_astro']
-            params_bounds = config['sampling_config']['params_bounds']
-            params_free = list(params_bounds.keys())
+            ##### TO DO: replace this with either using input user mock params, or random lhs single w/ rng_key
+            ##### TO DO: push this down to utils.setup_params ?
             true_params = jnp.array([params_fixed_astro[k] for k in params_free])
             print('true mock parameters\n',true_params,flush=True)
+
+            # note: batch_solve requires the full input parameters, not just subset true_params
+            tstart = timer()
+            mocksol = batch_solve(minibatch_halo_index,param_samples)
+            print(mocksol.ys[0][0][0],flush=True)
+            print('[minibatched] initial jit+sol took %.3f sec'%(timer()-tstart),flush=True)
+            
+            tstart = timer()
+            mocksol = batch_solve(minibatch_halo_index,param_samples)
+            print(mocksol.ys[0][0][0],flush=True)
+            print('[minibatched] jitted sol took %.3f sec'%(timer()-tstart),flush=True)            
             
             print('summarizing mock data...',flush=True)
+            # TO DO: push this import earlier, and use __init__ to load only summaries parent module
             import sapphire.summaries.gaussian_kernel_regression as gkr # can generalize later
 
             # although these are mocks, we use the same obs_ prefix for consistency with rest of code below
             # NOTE: return order of obs_stats is same order as expected by sapphire.inference module below
-            obs_stats = gkr.summarize_mock(sol)
+            obs_stats = gkr.summarize_mock(mocksol)
 
         """ otherwise add module to summarize input observations here """
         ### obs_stats = gkr.summarize_obs(config) 
@@ -166,11 +196,10 @@ def run(config):
         print('setting up model for inference...',flush=True)
 
         ### should push this down to sapphire.inference based on config, for explicit or ILI etc. 
-        from sapphire.inference import explicit_likelihood
-        loss_func, grad_loss_func, hess_loss_func = explicit_likelihood.setup(config,halo_index,obs_stats,batch_solve)
+        loss_func, grad_loss_func, hess_loss_func = inference.explicit_likelihood.setup(config,minibatch_halo_index,obs_stats,batch_solve)
 
         ### change this to also benchmark for non-mock (fitting obs)
-        ### and push this down to sapphire.utils or something 
+        ### and push this down to sapphire.utils or a new inference.coverage module or something 
         if inference_config['mock'] is True:
             tstart = timer()
             true_loss = loss_func(true_params)
@@ -191,7 +220,25 @@ def run(config):
             tgrad = timer()-tstart            
             
             print('[minibatched] true grad loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_grad_loss,tjit_grad,tgrad),flush=True)
-        
+
+            tstart = timer()
+            true_hess_loss = hess_loss_func(true_params)
+            tjit_hess = timer()-tstart
+
+            tstart = timer()
+            true_hess_loss = hess_loss_func(true_params)
+            thess = timer()-tstart            
+            
+            print('[minibatched] true hess loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_hess_loss,tjit_hess,thess),flush=True)
+
+            true_hess_flag = jnp.all(jnp.linalg.eigvalsh(true_hess_loss)>0)
+            print('true_hess_flag',true_hess_flag,flush=True)
+            # return true_hess_flag
+
+            true_Finv = jnp.linalg.inv(true_hess_loss)
+            print('true_Finv',true_Finv,flush=True)
+
+        ####### TO DO: push this to a unit test somewhere
         # params_bounds = config['sampling_config']['params_bounds']
         # params_free = list(params_bounds.keys())
 
@@ -229,8 +276,17 @@ def run(config):
         if config['inference_config']['engine'] == 'adam':
             print('calling adam for MAP+Fisher...',flush=True)
 
-            from sapphire.inference import run_adam
-            out_adam = run_adam.setup(config,loss_func,grad_loss_func)
+            out_adam = inference.run_adam.setup(config,loss_func,grad_loss_func)
+
+            ### compute MAP and fisher/covariance matrix
+            out_best = inference.map_fisher.from_adam(config,hess_loss_func,out_adam,true_params)
+
+            # return out_best
+                
+
+            ### figure making / save results if requested
+
+        
 
         elif config['inference_config']['engine'] == 'hmc':
             print('calling numpyro for HMC...',flush=True)
@@ -240,9 +296,7 @@ def run(config):
             raise ValueError('inference_config.engine must be either adam or hmc',flush=True)
     
 
-
-
-        
-    print('Finished -- thank you for using sapphire!',flush=True)
+    ### somehow have this total runtime always print upon program exit, even if return was up above somewhere 
+    print('Finished in %.1f min -- thank you for using sapphire!'%((timer()-tstart0)/60.),flush=True)
 
     
