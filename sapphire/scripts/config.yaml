@@ -1,0 +1,129 @@
+### general sapphire config 
+
+# if running on CPU, set this to # cores (idiosyncrasy of jax)
+# unnecessary for GPUs (which jax auto-detects)
+num_cpus: 50 
+
+# path to jaxified merger trees 
+tree_path: '/mnt/ceph/users/vpandya/jax_sapphire/tng_trees_jax/'
+
+# type of merger trees (see sapphire/trees/jax_read_trees.py)
+# NOTE: will try to enforce metadata in jaxified-sapphire tree format, so we can eventually remove this 
+tree_type: 'tng'
+
+# which physical model (diffeq system and parameterizations) to use
+# NOTE: this will be further modularized later 
+model: 'jax_thermal'
+
+# which cooling function to use
+# NOTE: this will be moved within a physical_config combined with model: above 
+coolfunc: 'sd93'
+
+# must be 'single', 'sampling' or 'inference' 
+runtype: 'inference'
+
+# where to store outputs and figures 
+output_path: ''
+
+### diffeq solver config
+solver_config:
+    engine: 'diffrax'
+    rtol: 1.0e-8
+    atol: 1.0e-8
+
+### baseline parameters for physical model
+# some of these may be overridden by sampling_config below, if inference or random mock requested
+# NOTE: this needs to be further modularized / coupled to physical_model section above
+params_fixed_astro: 
+    alpha_n: -1.5 # slope of CGM density power law  
+    alpha_T: 0.0 # slope of CGM temperature power law 
+    f_recycle: 0.4 # instantaneous stellar-->ISM recycling fraction 
+    yZ: 0.02 # metal yield of 1 SN per 100 Msun of stars formed (2 Msun / 100 Msun = 0.02 for 10 Msun of SN ejecta) 
+
+    ### typically free parameters 
+    # NOTE: somehow modularize the description so it's always obvious what A_X and alpha0_X are for power laws, etc. 
+    A_M: 0.0 # log10 power law normalization 
+    alpha0_M: -1.0 # power law slope 
+    A_E: -1.0 
+    alpha0_E: -1.0
+    A_SF: 0.8
+    alpha0_SF: -1.8
+    A_Z: -1.7
+    alpha0_Z: -0.3
+
+    ### typically fixed parameters
+    alphaz_M: 0.0 # redshift dependence of power law slope
+    beta_M: 0.0 # redshift dependence of power law normalization 
+    alphaz_E: 0.0
+    beta_E: 0.0
+    alphaz_SF: 0.0
+    beta_SF: -0.7
+    alphaz_Z: 0.0
+    beta_Z: 0.0
+
+                             
+# this determines how sampling is done for training set generation or the true mock parameters for inference
+sampling_config: 
+    method: 'lhs' # none, lhs, sobol
+    rng_sample: 1 # RNG key used for sampling
+
+    # if on CPU or multi-GPU, MUST be equal to or an integer multiple of devices
+    Nsamples: 100 
+    
+    # this simultaneously specifies which params are free and their bounds for Uniform sampling
+    # NOTE: this could be made more general for non-Uniform priors
+    params_bounds: 
+        A_M: [-2.0,1.0]
+        alpha0_M: [-2.0,0.0]
+        A_E: [-2.0,0.0]
+        alpha0_E: [-2.0,0.0]
+        A_SF: [0.0,1.1]
+        alpha0_SF: [-2.0,0.0]
+        A_Z: [-2.0,0.0]
+        alpha0_Z: [-2.0,0.0]
+
+
+# if you want to run inference -- ONLY if runtype == 'inference' above 
+inference_config:
+    engine: 'adam' # none, adam, hmc 
+    backend: 'manual' # numpyro, manual (likelihood for adam), blackjax 
+    rng_init: 9 # rng key for samplers for reproducibility
+    Nbatch: 1000 # number halos per iteration; if on CPU or multi-GPU, must be integer multiple of devices
+    Nchain: 2 # number of chains for HMC/NUTS, or initial guesses for adam
+    mock: True # if True, will use mock_err below and sampling_config above
+
+    ### flags to turn on or off different constraints' contribution to likelihood 
+    flag_smhm: 1 # 0 or 1 
+    flag_fgas: 1 
+    flag_mzr: 1      
+      
+    ### nested dict giving mock errors for each observable (this can be made more complicated internally)
+    # NOTE: clean this up ... 
+    mock_err:
+        smhm:
+            constant: 0.01 # "constant" in dex added in quadrature to intrinsic stderr(y)
+            scale: 1.0 # multiplies intrinsic stderr(y)
+        fgas: 
+            constant: 0.01 # dex for log10(mism/mstar)
+            scale: 1.0
+        mzr: 
+            constant: 0.01 # dex for log10(mzstar/mstar/zsun)
+            scale: 1.0
+      
+    # False = user inputs true mock params in sampling_config above
+    # True = sample single set of mock params (w/ bounds in sampling_config) and merge w/ fixed_params_astro above otherwise
+    random_mock: True
+
+ 
+# add item for pairs of variables for univariate regression e.g., [M
+# documentation should clarify -- different "types" may have different keys that need to be specified
+### Maybe get rid of this for now 
+# summary_stats: 
+#     type: 'gaussian_kernel_regression' # none, gaussian_kernel_regression, kde 
+#     # 'pairs':[(),(),()] # list of (x,y) = (independent,dependent) variable names
+                          
+
+
+
+
+# 

@@ -137,20 +137,8 @@ def from_adam(config,hess_loss_func,out_adam,true_params):
     else:
         sigma_true = jnp.full(len(true_params),jnp.nan)    
         accuracy_map = jnp.full(len(true_params),jnp.nan)    
-        
-    #### TO DO: re-add this back in here or elsewhere for printing against mock true parameters and true Finv curvatuer
-    # mock_truth = jnp.array([mock_truth_dict[k] for k in params_free])
-    # print('all final params\n',final_params_3,flush=True)
-    # print('adam_hess_flag',adam_hess_flag,flush=True)
-    # print('Finv_adam',Finv_adam,flush=True)
-    
-    # print('mock_truth\n',mock_truth,flush=True)
-    # print('best params\n',final_params_3[best_adam_index],flush=True)
-    # print('sigmas of Finv_adam\n',jnp.sqrt(jnp.diag(Finv_adam)),flush=True)
-    # print('sigmas of Finv_true\n',jnp.sqrt(jnp.diag(Finv_true)),flush=True)
-    
-    # print('best (theta_map-mock_truth)/Finv_true\n',(theta_map-mock_truth)/jnp.sqrt(jnp.diag(Finv_true)))
 
+    
     for i in range(len(theta_map)):
         print('%s = %.3f +/- %.3f, true=%.3f, sigma_true=%.3f, accuracy=%.3f'%(params_free[i],theta_map[i],sigma_map[i],
                                                                                true_params[i],sigma_true[i],accuracy_map[i]),flush=True)

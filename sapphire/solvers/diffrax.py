@@ -56,7 +56,6 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
     solver = Tsit5() #Dopri5() #Tsit5() #Bosh3() #Tsit5() #Dopri5()
     max_steps = 16**4 # if this is None, reverse-mode checkpointed adjoint (autodiff) cannot be done; typically we only need ~3K steps for our tolerance choice
     tsave = SaveAt(ts=t_eval,dense=True) # save solution on our finely spaced grid with dense interpolation
-    tol_ode = config['solver_config']['rtol_atol']
     
 
     # first need to trim # halos so it = integer # of devices
@@ -116,7 +115,9 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
         """ July 14 -- fix to atol=rtol=1e-5, max_steps=16**4, t1=True """
         sol_diffrax = diffeqsolve(terms,Tsit5(scan_kind='bounded'),
                                   logt_init,logt_final,dt0,initial_conditions,(batch_params,interps),throw=False,adjoint=DirectAdjoint(),
-                                  stepsize_controller=PIDController(rtol=tol_ode,atol=tol_ode),max_steps=max_steps,
+                                  stepsize_controller=PIDController(rtol=config['solver_config']['rtol'],
+                                                                    atol=config['solver_config']['atol']),
+                                  max_steps=max_steps,
                                   # saveat=SaveAt(ts=t_eval,fn=saveat_fn))
                                   saveat=SaveAt(t1=True,fn=saveat_fn))
         
