@@ -5,6 +5,7 @@ NOTE: *must* include the -m flag in the python call so it runs as a python packa
 
 from . import run # imports sapphire.run() driver from __init__.py 
 import argparse
+from pprint import pprint
 
 
 
@@ -21,6 +22,9 @@ def main():
     parser.add_argument("--mock_num", type=int)
     parser.add_argument("--rng_sample", type=int)
     parser.add_argument("--rng_init", type=int)
+    parser.add_argument("--flag_smhm", type=int)
+    parser.add_argument("--flag_fgas", type=int)
+    parser.add_argument("--flag_mzr", type=int)    
 
     # parse the known and unknown args
     # NOTE: add function to parse unknown args, assuming they follow same --key value structure on command line
@@ -29,6 +33,11 @@ def main():
     # convert args Namespace to dict 
     config = vars(args)
 
+    ### pretty-print parsed config 
+    print('\nyour command line config:\n',flush=True)
+    pprint(config, indent=4, compact=False) #, width=80, 
+    print('\n',flush=True)
+
     # finally call sapphire.run as usual
     run(config)
 
@@ -36,3 +45,6 @@ def main():
 if __name__ == '__main__':
     
     main()
+
+
+##

@@ -22,12 +22,11 @@ def get(config):
         config = {**yaml_config, **config} 
 
     if 'path_config' not in config.keys() and len(config.keys()) == 0:
-        raise ValueError('must provide config via yaml file and/or manually')
+        raise ValueError('must provide config via yaml file and/or manual dict')
 
-    ### print parsed config 
-    print('\nyour input config:\n',flush=True)
+    ### pretty-print parsed config 
+    print('\nyour full sapphire config:\n',flush=True)
     pprint(config, indent=4, compact=False) #, width=80, 
-
     print('\n',flush=True)
     
     return config 

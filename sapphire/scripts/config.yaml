@@ -22,8 +22,16 @@ coolfunc: 'sd93'
 # must be 'single', 'sampling' or 'inference' 
 runtype: 'inference'
 
-# where to store outputs and figures 
-output_path: ''
+# where to store npz outputs, figures 
+# sapphire will automatically generate subdirectories for outputs, figures, 
+# NOTE: perhaps write a script that automates generation (and/or submission of) disbatch task file
+# NOTE: perhaps add more customization options here for prefix, suffix, generic filename format, etc.
+output_path: '/mnt/ceph/users/vpandya/sapphire_outputs/'
+output_suffix: '{flag_smhm}{flag_fgas}{flag_mzr}' # will be pre-pended by f so variables get filled in
+
+### moving these outside to prevent complicated nested dict merge
+rng_sample: 1 # RNG key used for sampling
+rng_init: 9 # rng key for samplers for reproducibility
 
 ### diffeq solver config
 solver_config:
@@ -65,7 +73,6 @@ params_fixed_astro:
 # this determines how sampling is done for training set generation or the true mock parameters for inference
 sampling_config: 
     method: 'lhs' # none, lhs, sobol
-    rng_sample: 1 # RNG key used for sampling
 
     # if on CPU or multi-GPU, MUST be equal to or an integer multiple of devices
     Nsamples: 100 
@@ -87,32 +94,32 @@ sampling_config:
 inference_config:
     engine: 'adam' # none, adam, hmc 
     backend: 'manual' # numpyro, manual (likelihood for adam), blackjax 
-    rng_init: 9 # rng key for samplers for reproducibility
     Nbatch: 1000 # number halos per iteration; if on CPU or multi-GPU, must be integer multiple of devices
-    Nchain: 2 # number of chains for HMC/NUTS, or initial guesses for adam
+    Nchain: 3 # number of chains for HMC/NUTS, or initial guesses for adam
     mock: True # if True, will use mock_err below and sampling_config above
-
-    ### flags to turn on or off different constraints' contribution to likelihood 
-    flag_smhm: 1 # 0 or 1 
-    flag_fgas: 1 
-    flag_mzr: 1      
-      
-    ### nested dict giving mock errors for each observable (this can be made more complicated internally)
-    # NOTE: clean this up ... 
-    mock_err:
-        smhm:
-            constant: 0.01 # "constant" in dex added in quadrature to intrinsic stderr(y)
-            scale: 1.0 # multiplies intrinsic stderr(y)
-        fgas: 
-            constant: 0.01 # dex for log10(mism/mstar)
-            scale: 1.0
-        mzr: 
-            constant: 0.01 # dex for log10(mzstar/mstar/zsun)
-            scale: 1.0
       
     # False = user inputs true mock params in sampling_config above
     # True = sample single set of mock params (w/ bounds in sampling_config) and merge w/ fixed_params_astro above otherwise
     random_mock: True
+
+    # save output? (sapphire auto-detects adam vs numpyro vs ...)
+    write_output: True
+
+
+####### I moved these outside inference_config to avoid deep-merging dicts 
+### flags to turn on or off different constraints' contribution to likelihood 
+flag_smhm: 1 # 0 or 1 
+flag_fgas: 1 
+flag_mzr: 1      
+  
+### nested dict giving mock errors for each observable (this can be made more complicated internally)
+# NOTE: clean this up and generalize to allow for, e.g., scalar that multiplies intrinsic stderr(y), redshift dependent, etc. 
+# easiest may be to force user to implement their own general error function with input parameters here... 
+
+# "constant" in dex added in quadrature to intrinsic stderr(y)
+obs_err_smhm: 0.0 
+obs_err_fgas: 0.0 
+obs_err_mzr: 0.0
 
  
 # add item for pairs of variables for univariate regression e.g., [M

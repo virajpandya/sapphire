@@ -9,6 +9,10 @@ from astropy.cosmology import Planck15
 from functools import partial 
 from timeit import default_timer as timer
 
+# in case user loads module separately from sapphire.run()
+from jax import config as jax_config
+jax_config.update("jax_enable_x64", True) # required to accurately solve and take gradients through our diffeqs 
+
 import jax
 import jax.numpy as jnp
 from jax._src.third_party.scipy.interpolate import RegularGridInterpolator as jax_RegularGridInterpolator
@@ -135,6 +139,8 @@ def from_adam(config,hess_loss_func,out_adam,true_params):
         accuracy_map = (theta_map-true_params)/sigma_true
     
     else:
+        hess_true_flag = jnp.nan
+        Finv_true = jnp.full((len(true_params),len(true_params)), jnp.nan)
         sigma_true = jnp.full(len(true_params),jnp.nan)    
         accuracy_map = jnp.full(len(true_params),jnp.nan)    
 
@@ -153,7 +159,8 @@ def from_adam(config,hess_loss_func,out_adam,true_params):
     # print('finali=%s, best finali=%s'%(finali_3,best_adam_trace_loss.shape),flush=True)
 
     # TO DO: clean this up 
-    return (*out_best, best_finali, best_adam_trace_loss, best_adam_trace_params, best_adam_trace_grads)
+    return (*out_best, best_finali, best_adam_trace_loss, best_adam_trace_params, best_adam_trace_grads,
+            hess_true_flag,Finv_true,sigma_true, accuracy_map)
     
 
 

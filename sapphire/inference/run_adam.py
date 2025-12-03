@@ -9,6 +9,10 @@ from astropy.cosmology import Planck15
 from functools import partial 
 from timeit import default_timer as timer
 
+# in case user loads module separately from sapphire.run()
+from jax import config as jax_config
+jax_config.update("jax_enable_x64", True) # required to accurately solve and take gradients through our diffeqs 
+
 import jax
 import jax.numpy as jnp
 from jax._src.third_party.scipy.interpolate import RegularGridInterpolator as jax_RegularGridInterpolator
@@ -40,7 +44,7 @@ def setup(config,loss_func,grad_loss_func):
     Nfree = len(params_free)
     
     ### generate initial guess
-    base_key = jax.random.key(inference_config['rng_init'])
+    base_key = jax.random.key(config['rng_init'])
     init_keys = jax.random.split(base_key, len(list(params_bounds.keys()))) 
     
     # generate init param dict

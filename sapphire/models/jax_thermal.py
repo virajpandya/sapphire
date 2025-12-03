@@ -16,6 +16,10 @@ from astropy import units as u
 from astropy.cosmology import Planck15 
 from functools import partial 
 
+# in case user loads module separately from sapphire.run()
+from jax import config as jax_config
+jax_config.update("jax_enable_x64", True) # required to accurately solve and take gradients through our diffeqs 
+
 import jax.numpy as jnp
 from jax._src.third_party.scipy.interpolate import RegularGridInterpolator as jax_RegularGridInterpolator
 from jax import jit, grad, vmap, pmap, debug, jvp, vjp, jacrev, jacfwd, make_jaxpr, hessian, value_and_grad

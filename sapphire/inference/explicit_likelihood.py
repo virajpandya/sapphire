@@ -8,6 +8,10 @@ from astropy import units as u
 from astropy.cosmology import Planck15
 from functools import partial 
 
+# in case user loads module separately from sapphire.run()
+from jax import config as jax_config
+jax_config.update("jax_enable_x64", True) # required to accurately solve and take gradients through our diffeqs 
+
 import jax
 import jax.numpy as jnp
 from jax._src.third_party.scipy.interpolate import RegularGridInterpolator as jax_RegularGridInterpolator
@@ -51,9 +55,9 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
     lower_bounds = jnp.array([params_bounds[k][0] for k in params_free])
     upper_bounds = jnp.array([params_bounds[k][1] for k in params_free])  
 
-    Lflag_smhm = inference_config['flag_smhm'] 
-    Lflag_fgas = inference_config['flag_fgas'] 
-    Lflag_mzr = inference_config['flag_mzr']   
+    Lflag_smhm = config['flag_smhm'] 
+    Lflag_fgas = config['flag_fgas'] 
+    Lflag_mzr = config['flag_mzr']   
 
     Nbatch = inference_config['Nbatch']
 
@@ -68,15 +72,12 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
     ### IF MOCK MODE -- change obs_err_* to the user supplied constant or scalar
     #   (or have user add x-dependent function in sapphire.summaries and import here)
     if inference_config['mock'] is True:
-        mock_err = inference_config['mock_err']
 
         # unclear how to use "scale" since that needs to be multiplied by intrinsic stderr(y) inside 
         # might need to add that as static (non-jit-traced) input to logL functions below
-        obs_err_smhm = mock_err['smhm']['constant']
-        obs_err_fgas = mock_err['fgas']['constant']
-        obs_err_mzr = mock_err['mzr']['constant']
-
-        # print('input constant mock obs_err',obs_err_smhm,obs_err_fgas,obs_err_mzr,flush=True)
+        obs_err_smhm = config['obs_err_smhm']
+        obs_err_fgas = config['obs_err_fgas']
+        obs_err_mzr = config['obs_err_mzr']
     
     # uniform prior
     # @jit
@@ -116,7 +117,8 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
         full_params = jnp.array([full_params_dict[k] for k in full_params_order])
 
         # jax.debug.print('batch_params={} full_params={}',batch_params,full_params)
-        
+
+        # NOTE: this needs to be generalized using dicts
         full_params = full_params.at[0].set(10**full_params[0]) # 10**A_M
         full_params = full_params.at[4].set(10**full_params[4]) # 10**A_E
         full_params = full_params.at[8].set(10**full_params[8]) # 10**A_SF

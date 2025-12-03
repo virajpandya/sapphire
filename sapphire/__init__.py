@@ -33,7 +33,7 @@ plt.rcParams['ytick.right'] = True
 plt.rcParams['xtick.top'] = True
 
 # load sapphire modules that do not require dependency injection
-from sapphire.utils import read_config
+from sapphire.utils import read_config, write_results
 # from .coolfunc import read_coolfunc 
 # from .utils import writer 
 
@@ -49,7 +49,6 @@ def run(config):
 
     # just to benchmark entire runtime from start to finish
     tstart0 = timer()
-
 
     ### read config based on user input
     config = read_config.get(config) 
@@ -71,6 +70,9 @@ def run(config):
     # # if output directory does not already exist, create it
     # if os.path.exists(config['output_path']) == False:
     #     os.mkdir(config['output_path'])
+
+    ### first create the output subdirs if requested
+    write_results.create_output_subdirs(config)
     
     # load the relevant tree reading module
     if config['tree_type'] == 'tng':
@@ -135,9 +137,12 @@ def run(config):
     add module here to compress+save data directly for TSG/ILI 
     """
     
+    # NOTE: also add option to return extracted quantities and summary statistics
     if config['runtype'] in ['single','sampling']: 
         print('returning sol...',flush=True)
-        return sol
+        
+        # prepare generic out_sapphire tuple to be returned at end below
+        out_sapphire = (sol, )
     
     ### alternatively run inference if requested
     ######### Can this whole thing be put into a sapphire.inference wrapper module to keep driver / __ clean?
@@ -194,6 +199,10 @@ def run(config):
 
         ### change this to also benchmark for non-mock (fitting obs)
         ### and push this down to sapphire.utils or a new inference.coverage module or something 
+        
+        # by default nan's if not running in mock mode 
+        true_loss, true_grad_loss = jnp.nan, jnp.full(len(free_params_arr),jnp.nan)
+        
         if inference_config['mock'] is True:
             tstart = timer()
             true_loss = loss_func(true_params)
@@ -273,15 +282,31 @@ def run(config):
             out_adam = inference.run_adam.setup(config,loss_func,grad_loss_func)
 
             ### compute MAP and fisher/covariance matrix
-            out_best = inference.map_fisher.from_adam(config,hess_loss_func,out_adam,true_params)
+            out_map_fisher = inference.map_fisher.from_adam(config,hess_loss_func,out_adam,true_params)
 
-            # return out_best
+            ### compute posterior predictive checks at MAP 
+            post_preds_map = inference.posterior_predictive_checks.adam_map_fisher(config,obs_stats,out_map_fisher,
+                                                                                   batch_solve,minibatch_halo_index)
+            
+            ### write file if requested
+            if inference_config['write_output'] == True:
+                write_results.write_adam_map_fisher(config,out_map_fisher,full_params_arr,free_params_arr,
+                                                    true_loss,true_grad_loss,obs_stats,post_preds_map)
+        
+            
+            # return outputs for interactive analysis
+            # NOTE: this should be improved, so the timer print statement below always run
+            # return config, out_map_fisher, full_params_arr, free_params_arr
+
+            # collect outputs to return for interactive analysis if desired
+            out_sapphire = (config, out_map_fisher, full_params_arr, free_params_arr,
+                            true_loss, true_grad_loss, obs_stats, post_preds_map)
                 
 
-            ### figure making / save results if requested
+            ### additional figure making -- though maybe this can be imported and done separately
 
-        
 
+        ### this whole thing (w/ adam above) needs to be pushed down to sapphire/inference module
         elif config['inference_config']['engine'] == 'hmc':
             print('calling numpyro for HMC...',flush=True)
 
@@ -292,6 +317,8 @@ def run(config):
 
     ### somehow have this total runtime always print upon program exit, even if return was up above somewhere 
     print('Finished in %.1f min -- thank you for using sapphire!'%((timer()-tstart0)/60.),flush=True)
+
+    return out_sapphire
 
 
 
