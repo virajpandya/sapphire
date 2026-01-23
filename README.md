@@ -25,16 +25,3 @@ sapphire is designed to be modular to maximize flexibility for assumed subgrid p
 
 ### <<< add a basic flowchart/diagram showing the different code modules >>>
 
-
-# Action items still being worked on
-- Switch everything to the new logarithmic integrator version with meaningful rtol and atol
-- Modularize the integrator function by creating file(s) in subgrid_recipes that have functions that return individual RHS ODE terms
-- Add a highly generalized set of parameter functions for power laws, etc. with slopes/normalizations
-- Switch everything to the new JAX backend and update sapphire installation instructions (special for JAX on M1 mac)
-- Figure out and implement the optimal strategy for mpi4py over nodes + think about GPUs for JAX
-- Implement smarter, faster parallelized read/write with hdf5/msgpack output files
-- Allow for a JSON parameter input file to be specified as a command line argument (e.g., python -m sapphire parameters.json) 
-- Go back and re-enable automated testing (Continuous Integration) via Github Actions 
-- Create a rusty Binder example and include link above for people that want to test sapphire without downloading
-- Create ReadTheDocs and make it clear how users can fork and add their own modules 
-- Allow option to output 2D (time--metallicity) SFHs to feed to SPS models for predicting stellar pops / galaxy observables
