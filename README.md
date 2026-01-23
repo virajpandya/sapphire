@@ -17,11 +17,11 @@ This will create a new environment called sapphire which you can activate by doi
 #3 will enable you to do ```import sapphire``` in Python from anywhere on your system without needing to be in the cloned sapphire git directory. 
 Once we allow pip install, #2 and #3 will no longer be necessary except for maybe the private development branch.
 
-# Basic usage 
-There are two main ways to run sapphire -- on the command line or via "import sapphire". See sapphire/scripts and sapphire/demo for examples. 
-
 # Overview of code layout and philosophy 
 sapphire is designed to be modular to maximize flexibility for assumed subgrid physics and for the numerics of how the ODEs are defined and solved.
 
 ### <<< add a basic flowchart/diagram showing the different code modules >>>
+
+# Basic usage 
+There are two main ways to run sapphire -- on the command line or via "import sapphire". See sapphire/scripts and sapphire/demo for examples. 
 
