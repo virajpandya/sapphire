@@ -180,3 +180,4 @@ cython_debug/
 # ignore Viraj's local development folder (ipynbs, data, etc.) 
 localdev/
 data/*
+!data/.gitkeep
