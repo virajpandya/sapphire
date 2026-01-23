@@ -4,7 +4,9 @@ sapphire is a JAX-based dynamical model for the phase space evolution of galaxy 
 <img width="1080" alt="sapphire_jax_github" src="https://user-images.githubusercontent.com/4482189/219704156-47d53e16-34b3-4937-863c-e05570c685ea.png">
 logo/banner is a work in progress ... 
 
-# Installation instructions [add JAX CPU/GPU install instructions]
+# Installation instructions 
+### <<< simplify and add example install script for JAX w/ CPU-only vs GPU support on mac, cluster, etc. >>>
+
 Until we have a public release that can be pip/conda installed, please do the following to install the private development version: 
 1. make sure you have a python=3.10 environment with the required dependencies given in environment.yml 
 2. ```git clone git@github.com:virajpandya/sapphire.git```  (NOTE: this is a private repo so you'll probably need your git login)
