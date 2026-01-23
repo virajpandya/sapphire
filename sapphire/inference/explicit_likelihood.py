@@ -27,13 +27,9 @@ from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec, PositionalSharding, NamedSharding
 
-import numpyro
-import numpyro.distributions as dist
-from numpyro.infer import MCMC, NUTS, Predictive, AIES, ESS
-
 # this keeps it clean
 import sapphire.summaries.gaussian_kernel_regression as gkr
-
+from . import run_numpyro # in case user requests numpyro-based loss
 
 def setup(config,minibatch_halo_index,obs_stats,batch_solve):
 
@@ -62,16 +58,15 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
     Nbatch = inference_config['Nbatch']
 
     ### unpack input observed (or mock) summary statistics
-    (obs_avg_smhm,obs_err_smhm,
-     obs_avg_fgas,obs_err_fgas,
-     obs_avg_mzr,obs_err_mzr,
-     obs_x0_mvir,obs_bw_mvir,obs_x0_mstar,obs_bw_mstar) = obs_stats
+    (obs_x0_smhm,obs_bw_smhm,obs_avg_smhm,obs_err_smhm,
+     obs_x0_fgas,obs_bw_fgas,obs_avg_fgas,obs_err_fgas,
+     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr) = obs_stats
 
     # print('raw mock obs_err',obs_err_smhm,obs_err_fgas,obs_err_mzr,flush=True)
     
     ### IF MOCK MODE -- change obs_err_* to the user supplied constant or scalar
     #   (or have user add x-dependent function in sapphire.summaries and import here)
-    if inference_config['mock'] is True:
+    if inference_config['fit_mock'] is True and inference_config['fit_obs'] is False: # checking both as safeguard
 
         # unclear how to use "scale" since that needs to be multiplied by intrinsic stderr(y) inside 
         # might need to add that as static (non-jit-traced) input to logL functions below
@@ -131,9 +126,9 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
         """ July 14 -- more compact using functions above """
         z0_Mvir, z0_smhm, fail_flag, Nfail, z0_Mstar, z0_fgas, z0_mzr = gkr.extract_quantities(shsol)
     
-        pred_avg_smhm, pred_err_smhm = gkr.nadaraya_watson(z0_Mvir, z0_smhm, obs_x0_mvir, obs_bw_mvir)
-        pred_avg_fgas, pred_err_fgas = gkr.nadaraya_watson(z0_Mstar, z0_fgas, obs_x0_mstar, obs_bw_mstar)
-        pred_avg_mzr, pred_err_mzr = gkr.nadaraya_watson(z0_Mstar, z0_mzr, obs_x0_mstar, obs_bw_mstar)    
+        pred_avg_smhm, pred_err_smhm = gkr.nadaraya_watson(z0_Mvir, z0_smhm, obs_x0_smhm, obs_bw_smhm)
+        pred_avg_fgas, pred_err_fgas = gkr.nadaraya_watson(z0_Mstar, z0_fgas, obs_x0_fgas, obs_bw_fgas)
+        pred_avg_mzr, pred_err_mzr = gkr.nadaraya_watson(z0_Mstar, z0_mzr, obs_x0_mzr, obs_bw_mzr)    
 
         ### NEED TO ADD ACTUAL OBS QUADRATURE SUM OPTION HERE (AS for numpyro below)
         tot_err_smhm = jnp.sqrt(pred_err_smhm**2 + obs_err_smhm**2)
@@ -163,107 +158,16 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
     
         # return LOSS := negative log_posterior 
         return -log_posterior
-    
-    
-    """ alternatively, the equivalent model in numpyro """
-    
-    # note: these input obs can be different from the obs_ ones returned above
-    # TO DO: move this to separate module, then just import the loss (with same call signature) 
-    def model(obs_avg_smhm,obs_err_smhm,obs_avg_fgas,obs_err_fgas,obs_avg_mzr,obs_err_mzr):
-        
-        ### sample the free parameters assuming their respective Uniform priors 
-        # the user should change the prior sampling function as needed...
-        params_dict = {}
-        for i, name in enumerate(params_free):
-            params_dict[name] = numpyro.sample(name,dist.Uniform(lower_bounds[i], upper_bounds[i]))
 
-        # build full parameter dict and array 
-        full_params_dict = {**params_dict, **params_fixed_astro}
-        full_params = jnp.array([full_params_dict[k] for k in full_params_order])
-        
-        full_params = full_params.at[0].set(10**full_params[0]) # 10**A_M
-        full_params = full_params.at[4].set(10**full_params[4]) # 10**A_E
-        full_params = full_params.at[8].set(10**full_params[8]) # 10**A_SF
-        full_params = full_params.at[12].set(10**full_params[12]) # 10**A_Z
-        full_params = jnp.concatenate([full_params,jnp.array([0])]) # realization #
-
-        ### for some reason with adam, Uniform hard-cutoff is not enforced
-        ### so here add a soft quadratic penalty just like i was doing manually, using numpyro.factor
-        parr = jnp.array([params_dict[name] for name in params_free])
-        lower_penalty = jnp.sum(jnp.maximum(lower_bounds - parr, 0)**2)
-        upper_penalty = jnp.sum(jnp.maximum(parr - upper_bounds, 0)**2)
-        penalty = 1e8 * Nbatch * (lower_penalty + upper_penalty) # only gradient should matter, not normalization I think
-        numpyro.factor('penalty', -penalty)
-        
-        # first call the batch solve 
-        shsol = batch_solve(minibatch_halo_index, full_params)
-    
-        """ July 14 -- more compact using functions above """
-        z0_Mvir, z0_smhm, fail_flag, Nfail, z0_Mstar, z0_fgas, z0_mzr = gkr.extract_quantities(shsol)
-    
-        numpyro.deterministic('Nfail', Nfail)    
-    
-        ### July 24 -- evaluate now using observed x0 and bin(=band) widths
-        pred_avg_smhm, pred_err_smhm = gkr.nadaraya_watson(z0_Mvir, z0_smhm, obs_x0_mvir, obs_bw_mvir)
-        pred_avg_fgas, pred_err_fgas = gkr.nadaraya_watson(z0_Mstar, z0_fgas, obs_x0_mstar, obs_bw_mstar)
-        pred_avg_mzr, pred_err_mzr = gkr.nadaraya_watson(z0_Mstar, z0_mzr, obs_x0_mstar, obs_bw_mstar) 
-    
-        """ July 24 -- quadrature sum intrinsic model standard error with observed uncertainty """ 
-        ### NEED TO UPDATE THIS TO GENERALLY HANDLE MOCKED OR ACTUAL OBSERVED EXTRA ERROR 
-        tot_err_smhm = jnp.sqrt(pred_err_smhm**2 + obs_err_smhm**2)
-        tot_err_fgas = jnp.sqrt(pred_err_fgas**2 + obs_err_fgas**2)
-        tot_err_mzr = jnp.sqrt(pred_err_mzr**2 + obs_err_mzr**2)
-
-        # to save as part of outputs 
-        numpyro.deterministic('pred_avg_smhm',pred_avg_smhm)
-        numpyro.deterministic('pred_avg_fgas',pred_avg_fgas)
-        numpyro.deterministic('pred_avg_mzr',pred_avg_mzr)
-        numpyro.deterministic('pred_err_smhm',pred_err_smhm)
-        numpyro.deterministic('pred_err_fgas',pred_err_fgas)
-        numpyro.deterministic('pred_err_mzr',pred_err_mzr)    
-        
-        if obs_avg_smhm is None: # for prior and posterior predictive checks
-    
-            numpyro.sample('obs_avg_smhm',dist.Normal(pred_avg_smhm,tot_err_smhm)) 
-            numpyro.sample('obs_avg_fgas',dist.Normal(pred_avg_fgas,tot_err_fgas)) 
-            numpyro.sample('obs_avg_mzr',dist.Normal(pred_avg_mzr,tot_err_mzr)) 
-            
-        else:
-    
-            # sample gaussian likelihoods independently (these will be internally summed by numpyro like we'd do manually)
-            # May 15 -- only compute each logL if requested based on command line argument
-            if Lflag_smhm:
-                obs_avg_smhm = numpyro.sample('obs_avg_smhm',dist.Normal(pred_avg_smhm,tot_err_smhm), obs=obs_avg_smhm)
-            
-            if Lflag_fgas:
-                obs_avg_fgas = numpyro.sample('obs_avg_fgas',dist.Normal(pred_avg_fgas,tot_err_fgas), obs=obs_avg_fgas)
-    
-            if Lflag_mzr: 
-                obs_avg_mzr = numpyro.sample('obs_avg_mzr',dist.Normal(pred_avg_mzr,tot_err_mzr), obs=obs_avg_mzr)
-                
-
-    # in case we want to compute loss for adam based on numpyro model
-    # this hard-codes the input obs constraint as inputs to numpyro model() function
-    def numpyro_loss(params):
-        # numpyro.infer.util.log_density returns (log_density, aux) tuple.
-        logp, _ = numpyro.infer.util.log_density(model, 
-                                                 (obs_avg_smhm,obs_err_smhm,
-                                                  obs_avg_fgas,obs_err_fgas,
-                                                  obs_avg_mzr,obs_err_mzr), 
-                                                 {}, params)
-        
-        # take negative of numpyro log-posterior so it is a loss for adam
-        return -logp
     
 
     # return jitted loss, grad(loss) and hessian(loss) functions 
-    if inference_config['backend'] == 'numpyro':
-        loss_func = numpyro_loss
-    elif inference_config['backend'] == 'manual':
-        loss_func = negative_log_posterior 
-
+    if inference_config['adam_logL'] == 'numpyro':
+        # TO DO: adam params needs to be dict for numpyro, not array 
+        loss_func = run_numpyro.setup(config,minibatch_halo_index,obs_stats,batch_solve) # returns numpyro_loss func
+    elif inference_config['adam_logL'] == 'manual':
+        loss_func = negative_log_posterior # else use the manual one above (user should check that both numpyro/manual are equivalent)
     return jax.jit(loss_func), jax.jit(jax.jacfwd(loss_func)), jax.jit(jax.jacfwd(jax.jacfwd(loss_func)))
-    # return loss_func, jax.jacfwd(loss_func), jax.jacfwd(jax.jacfwd(loss_func))
 
 
 

@@ -18,13 +18,17 @@ def main():
 
     # commonly used known args for sapphire
     # NOTE: add more here as required
+    # TO DO: change read_config to use default from config.yaml instead of None if user doesn't input these
     parser.add_argument("--path_config", type=str, default=None, help='path to default baseline yaml config file', required=True)
     parser.add_argument("--mock_num", type=int)
-    parser.add_argument("--rng_sample", type=int)
-    parser.add_argument("--rng_init", type=int)
+    # parser.add_argument("--rng_sample", type=int)
+    # parser.add_argument("--rng_init", type=int)
     parser.add_argument("--flag_smhm", type=int)
     parser.add_argument("--flag_fgas", type=int)
-    parser.add_argument("--flag_mzr", type=int)    
+    parser.add_argument("--flag_mzr", type=int)  
+    parser.add_argument("--chain_num", type=int)  
+    parser.add_argument("--obs_name", type=str)  
+    parser.add_argument("--obs_path", type=str)  
 
     # parse the known and unknown args
     # NOTE: add function to parse unknown args, assuming they follow same --key value structure on command line

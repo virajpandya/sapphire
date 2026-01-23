@@ -39,10 +39,10 @@ import sapphire.summaries.gaussian_kernel_regression as gkr
 def adam_map_fisher(config,obs_stats,out_map_fisher,batch_solve,minibatch_halo_index):
 
     # unpack input observed (or mock) summary statistics (this provides bandwidths)
-    (obs_avg_smhm,obs_err_smhm,
-     obs_avg_fgas,obs_err_fgas,
-     obs_avg_mzr,obs_err_mzr,
-     obs_x0_mvir,obs_bw_mvir,obs_x0_mstar,obs_bw_mstar) = obs_stats  
+    (obs_x0_smhm,obs_bw_smhm,obs_avg_smhm,obs_err_smhm,
+     obs_x0_fgas,obs_bw_fgas,obs_avg_fgas,obs_err_fgas,
+     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr) = obs_stats
+    
     
     # unpack out_map_fisher (see return signature of sapphire/inference/map_fisher.py)
     (best_adam_loss, theta_map, adam_hess_arr, adam_hess_flag, Finv_adam, best_adam_index,
@@ -85,9 +85,9 @@ def adam_map_fisher(config,obs_stats,out_map_fisher,batch_solve,minibatch_halo_i
     # NOTE: this needs to be generalized for other quantities, summary statistics, etc. 
     map_z0_Mvir, map_z0_smhm, map_fail_flag, map_Nfail, map_z0_Mstar, map_z0_fgas, map_z0_mzr = gkr.extract_quantities(sol_map)
     
-    map_avg_smhm, map_err_smhm = gkr.nadaraya_watson(map_z0_Mvir, map_z0_smhm, obs_x0_mvir, obs_bw_mvir)
-    map_avg_fgas, map_err_fgas = gkr.nadaraya_watson(map_z0_Mstar, map_z0_fgas, obs_x0_mstar, obs_bw_mstar)
-    map_avg_mzr, map_err_mzr = gkr.nadaraya_watson(map_z0_Mstar, map_z0_mzr, obs_x0_mstar, obs_bw_mstar)            
+    map_avg_smhm, map_err_smhm = gkr.nadaraya_watson(map_z0_Mvir, map_z0_smhm, obs_x0_smhm, obs_bw_smhm)
+    map_avg_fgas, map_err_fgas = gkr.nadaraya_watson(map_z0_Mstar, map_z0_fgas, obs_x0_fgas, obs_bw_fgas)
+    map_avg_mzr, map_err_mzr = gkr.nadaraya_watson(map_z0_Mstar, map_z0_mzr, obs_x0_mzr, obs_bw_mzr)
     
     return (map_z0_Mvir, map_z0_smhm, map_Nfail, map_z0_Mstar, map_z0_fgas, map_z0_mzr,
             map_avg_smhm, map_err_smhm, map_avg_fgas, map_err_fgas, map_avg_mzr, map_err_mzr)

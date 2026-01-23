@@ -6,7 +6,7 @@ all outputs into a single output file.
 """
 
 import numpy as np 
-import os, shutil
+import os
 import multiprocess 
 import pandas as pd
 from astropy import constants as const
@@ -36,6 +36,7 @@ from jax.sharding import Mesh, PartitionSpec, PositionalSharding, NamedSharding
 
 
 # this creates output subdirectories if they don't exist 
+# this is called up front at beginning of sapphire so an expensive run is not wasted due to IO errors
 def create_output_subdirs(config):
 
     if 'output_path' not in config.keys() or config['output_path'] == '':
@@ -71,18 +72,21 @@ def write_adam_map_fisher(config,out_map_fisher,full_params_arr,free_params_arr,
     params_free = list(params_bounds.keys())    
 
     ### unpack obs_stats (from mock or observations)
-    (obs_avg_smhm,obs_err_smhm,
-     obs_avg_fgas,obs_err_fgas,
-     obs_avg_mzr,obs_err_mzr,
-     obs_x0_mvir,obs_bw_mvir,obs_x0_mstar,obs_bw_mstar) = obs_stats     
+    (obs_x0_smhm,obs_bw_smhm,obs_avg_smhm,obs_err_smhm,
+     obs_x0_fgas,obs_bw_fgas,obs_avg_fgas,obs_err_fgas,
+     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr) = obs_stats   
     
     ### unpack posterior predictives at theta_map 
     (map_z0_Mvir, map_z0_smhm, map_Nfail, map_z0_Mstar, map_z0_fgas, map_z0_mzr,
      map_avg_smhm, map_err_smhm, map_avg_fgas, map_err_fgas, map_avg_mzr, map_err_mzr) = post_preds_map
     
-    # set up npz filename
-    if 'mock_num' in config.keys():
+    # set up npz filename depending if its obs or not
+    ### TO DO: check that this is all valid upfront in read_config (to not waste time with a crash at end)
+    ### -----> perhaps have read_config add a new outfile name there directly... 
+    if 'mock_num' in config.keys() and config['inference_config']['fit_mock']==True:
         prefix = 'mock%s'%config['mock_num']
+    elif config['inference_config']['fit_obs'] == True:
+        prefix = config['obs_name']
     else:
         prefix = ''
 
@@ -119,16 +123,18 @@ def write_adam_map_fisher(config,out_map_fisher,full_params_arr,free_params_arr,
 
               ### save summary stats from obs/mock and at theta_map 
               # again this needs to be generalized for arbitrary quantities and summary statistics
+              obs_x0_smhm = obs_x0_smhm,
+              obs_bw_smhm = obs_bw_smhm,
               obs_avg_smhm = obs_avg_smhm, 
               obs_err_smhm = obs_err_smhm,
+              obs_x0_fgas = obs_x0_fgas,
+              obs_bw_fgas = obs_bw_fgas,                 
               obs_avg_fgas = obs_avg_fgas, 
               obs_err_fgas = obs_err_fgas,
+              obs_x0_mzr = obs_x0_mzr,
+              obs_bw_mzr = obs_bw_mzr,              
               obs_avg_mzr = obs_avg_mzr,
               obs_err_mzr = obs_err_mzr,
-              obs_x0_mvir = obs_x0_mvir,
-              obs_bw_mvir = obs_bw_mvir,
-              obs_x0_mstar = obs_x0_mstar,
-              obs_bw_mstar = obs_bw_mstar,
               
               map_z0_Mvir = map_z0_Mvir, 
               map_z0_smhm = map_z0_smhm, 

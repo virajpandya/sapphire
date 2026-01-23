@@ -1,0 +1,144 @@
+### general sapphire config 
+
+# if running on CPU, set this to # cores (idiosyncrasy of jax)
+# unnecessary for GPUs (which jax auto-detects)
+num_cpus: 50 
+
+# path to jaxified merger trees 
+tree_path: '/mnt/ceph/users/vpandya/sapphire/data/trees/tng/'
+
+# type of merger trees (see sapphire/trees/jax_read_trees.py)
+# NOTE: will try to enforce metadata in jaxified-sapphire tree format, so we can eventually remove this 
+tree_type: 'tng'
+
+# number halos per iteration; if on CPU or multi-GPU, must be integer multiple of devices
+Nbatch: 1000 
+
+# which physical model (diffeq system and parameterizations) to use
+# NOTE: this will be further modularized later 
+model: 'pandya23'
+
+# which cooling function to use
+# NOTE: this will be moved within a physical_config combined with model: above 
+coolfunc: 'sd93'
+
+# must be 'single', 'sampling' or 'inference' 
+runtype: 'inference'
+
+### moving these outside to prevent complicated nested dict merge
+rng_sample: 1 # RNG key used for sampling
+rng_init: 8 # rng key for samplers for reproducibility
+
+### diffeq solver config
+solver_config:
+    engine: 'diffrax'
+    rtol: 1.0e-8
+    atol: 1.0e-8
+
+### baseline parameters for physical model
+# some of these may be overridden by sampling_config below, if inference or random mock requested
+# NOTE: this needs to be further modularized / coupled to physical_model section above
+params_fixed_astro: 
+    alpha_n: -1.5 # slope of CGM density power law  
+    alpha_T: 0.0 # slope of CGM temperature power law 
+    f_recycle: 0.4 # instantaneous stellar-->ISM recycling fraction 
+    yZ: 0.02 # metal yield of 1 SN per 100 Msun of stars formed (2 Msun / 100 Msun = 0.02 for 10 Msun of SN ejecta) 
+
+    ### typically free parameters 
+    # NOTE: somehow modularize the description so it's always obvious what A_X and alpha0_X are for power laws, etc. 
+    A_M: 0.0 # log10 power law normalization 
+    alpha0_M: -1.0 # power law slope 
+    A_E: -1.0 
+    alpha0_E: -1.0
+    A_SF: 0.8
+    alpha0_SF: -1.8
+    A_Z: -1.7
+    alpha0_Z: -0.3
+
+    ### typically fixed parameters
+    alphaz_M: 0.0 # redshift dependence of power law slope
+    beta_M: 0.0 # redshift dependence of power law normalization 
+    alphaz_E: 0.0
+    beta_E: 0.0
+    alphaz_SF: 0.0
+    beta_SF: -0.7
+    alphaz_Z: 0.0
+    beta_Z: 0.0
+
+                             
+# this determines how sampling is done for training set generation or the true mock parameters for inference
+sampling_config: 
+    method: 'lhs' # none, lhs, sobol
+
+    # if on CPU or multi-GPU, MUST be equal to or an integer multiple of devices
+    Nsamples: 100 
+    
+    # this simultaneously specifies which params are free and their bounds for Uniform sampling
+    # NOTE: this could be made more general for non-Uniform priors
+    params_bounds: 
+        A_M: [-2.0,1.0]
+        alpha0_M: [-2.0,0.0]
+        A_E: [-2.0,0.0]
+        alpha0_E: [-2.0,0.0]
+        A_SF: [0.0,1.1]
+        alpha0_SF: [-2.0,0.0]
+        A_Z: [-2.0,0.0]
+        alpha0_Z: [-2.0,0.0]
+
+
+# if you want to run inference -- ONLY if runtype == 'inference' above 
+inference_config:
+    engine: 'nuts' # adam, nuts
+    adam_logL: 'numpyro' # manual, numpyro; did the user define a logL manually or with a probabilistic programming language 
+    Nadam: 3 # number of initial guesses / trajectories for adam
+
+    # if True, will use mock_err below and sampling_config above
+    fit_mock: False
+      
+    # False = user inputs true mock params in sampling_config above
+    # True = sample single set of mock params (w/ bounds in sampling_config) and merge w/ fixed_params_astro above otherwise
+    random_mock: True
+
+    # save output? (sapphire auto-detects adam vs numpyro vs ...)
+    write_output: True
+
+    # toggle using observational constraints and path to file
+    fit_obs: True
+
+    ### numpyro HMC/NUTS options
+    num_warmup: 2000
+    num_samples: 10000
+
+
+####### I moved these outside inference_config to avoid deep-merging dicts 
+### flags to turn on (1) or off (0) different constraints' contribution to likelihood 
+flag_smhm: 1 
+flag_fgas: 1 
+flag_mzr: 1      
+  
+### assumed mock errors -- only used if inference_config['fit_mock']==True AND (as safeguard) inference_config['fit_obs']==False
+obs_err_smhm: 0.0 # "constant" in dex added in quadrature to intrinsic stderr(y)
+obs_err_fgas: 0.0 
+obs_err_mzr: 0.0
+
+### systematic shift up/down for each scaling relation (applied in read_obs.py)
+shift_smhm: 0.0
+shift_fgas: 0.0 
+shift_mzr: 0.0
+
+### chain_num and mock_num here for easy command line argparse without nested dicts...
+chain_num: 0
+
+### sapphire/utils/read_data will read multiple files from here if fit_obs=True
+obs_name: 'lit' # manga
+obs_path: '/mnt/ceph/users/vpandya/sapphire/data/obs/literature/' # '/mnt/ceph/users/vpandya/sapphire/data/obs/manga/obs_stats_manga.npz'
+
+# where to store npz outputs, figures 
+# sapphire will automatically generate subdirectories for outputs, figures, 
+# NOTE: perhaps write a script that automates generation (and/or submission of) disbatch task file
+# NOTE: perhaps add more customization options here for prefix, suffix, generic filename format, etc.
+output_path: '/mnt/ceph/users/vpandya/sapphire_outputs/'
+output_suffix: '{flag_smhm}{flag_fgas}{flag_mzr}_fixsmhm_10K' # will be pre-pended by f so variables get filled in
+output_prefix: 'numpyro_{obs_name}_chain{chain_num}'
+
+# 

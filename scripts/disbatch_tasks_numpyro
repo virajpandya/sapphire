@@ -1,0 +1,2 @@
+#DISBATCH PREFIX chainnum=$((DISBATCH_REPEAT_INDEX)) ; ( source activate jaxclone ; python -m sapphire --path_config "/mnt/ceph/users/vpandya/sapphire/scripts/config.yaml" --chain_num $chainnum --flag_smhm 1 --flag_fgas 0 --flag_mzr 0 --obs_name "manga" --obs_path "/mnt/ceph/users/vpandya/sapphire/data/obs/manga/obs_stats_manga.npz" ) &> /mnt/ceph/users/vpandya/sapphire_outputs/logs/numpyro_chain${chainnum}_100_manga_fixsmhm_10K.log
+#DISBATCH REPEAT 4

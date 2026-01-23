@@ -33,9 +33,7 @@ plt.rcParams['ytick.right'] = True
 plt.rcParams['xtick.top'] = True
 
 # load sapphire modules that do not require dependency injection
-from sapphire.utils import read_config, write_results
-# from .coolfunc import read_coolfunc 
-# from .utils import writer 
+from sapphire.utils import read_config, write_results, read_trees
 
 # NOTE: this should be further modularized as needed, including any dependency injections (loading of modules based on config dict)
 def run(config):
@@ -51,21 +49,25 @@ def run(config):
     tstart0 = timer()
 
     ### read config based on user input
-    config = read_config.get(config) 
+    config = read_config.get(config,verbose=True) 
     
     # if multiple CPU cores requested, set environment flag (idiosyncrasy of jax on CPUs)
     ### Can this now be done afterwards using jax_config below?
+    ########## This needs to be done up above, so import sapphire at the beginning of any ipynb prevents the num_cpus=1 issue
     if config['num_cpus'] > 1:
+        print('setting xla_force_host_platform_device_count=%s'%config['num_cpus'],flush=True)
         os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=%s"%config['num_cpus']
 
     ### now load jax
     # NOTE: there has to be a cleaner, compact way to load all of these jax packages up top... 
     from jax import config as jax_config
+    print('enabling float64 for jax',flush=True)
     jax_config.update("jax_enable_x64", True) # required to accurately solve and take gradients through our diffeqs 
 
     import jax    
     import jax.numpy as jnp
     print('jax version',jax.__version__,flush=True)
+    print('jax devices',jax.devices(),flush=True)
     
     # # if output directory does not already exist, create it
     # if os.path.exists(config['output_path']) == False:
@@ -75,27 +77,23 @@ def run(config):
     write_results.create_output_subdirs(config)
     
     # load the relevant tree reading module
-    if config['tree_type'] == 'tng':
-        from sapphire.trees import jax_read_tng as tree_reader    
-    else: # NOTE: glob and print a list of available tree_type strings based on modules available in read_trees subdirectory
-        raise ValueError('tree_type must be one of the types implemented in the trees module') 
+    ### TO DO: push this to utils.read_trees 
+    # if config['tree_type'] == 'tng':
+    #     from sapphire.trees import jax_read_tng as tree_reader    
+    # else: # NOTE: glob and print a list of available tree_type strings based on modules available in read_trees subdirectory
+    #     raise ValueError('tree_type must be one of the types implemented in the trees module') 
         
     # now read the trees into a dict where the key is halo name/ID and element is an astropy Table
     # read and interpolate into the required jax halo matrix format
     print('Reading trees and converting to jax matrices...',flush=True)
-    halo_matrix, halo_coeff_matrix, halo_tinit, halo_index, ts_interp = tree_reader.read_trees(config)
+    halo_matrix, halo_coeff_matrix, halo_tinit, halo_index, ts_interp = read_trees.get(config)
         
     # use dependency injection to read in the requested physical model, then the associated parameter functions using dependency injection
-    # NOTE: this parsing / dependency injection will eventually be moved to another utility module 
-
-    if config['model'] == 'jax_thermal':
-        from sapphire.models import jax_thermal as model
-    else:
-        raise ValueError('you must enter the name of an existing model within the sapphire models module') 
-
-    integrator, saveat_fn = model.setup(config)
+    from sapphire.models import model_loader
+    integrator, saveat_fn, list_parameterizations = model_loader.get(config,verbose=True)
 
     ### decide how to run: single set of parameters or sampling many params simultaneously
+    ### TO DO: move this parsing / dependency injection to a utility module 
     from sapphire.utils import setup_parameters 
 
     if config['runtype'] not in ['single','sampling','inference']:
@@ -120,8 +118,6 @@ def run(config):
 
     ### Finally solve the ODEs for single or multiple halos
     # this is clunky, can push the solve down to sapphire.solvers.diffrax itself, returning batch_solve only for inference later 
-
-    ### TO DO: remove this in favor of minibatched below? and/or can push down to future TSG/ILI module otherwise?
     
     tstart = timer()
     sol = batch_solve(halo_index,full_params_arr)
@@ -133,6 +129,7 @@ def run(config):
     print(sol.ys[0][0][0],flush=True)
     print('full-batch jitted sol took %.3f sec'%(timer()-tstart),flush=True)
 
+    
     """ 
     add module here to compress+save data directly for TSG/ILI 
     """
@@ -155,31 +152,16 @@ def run(config):
         params_fixed_astro = config['params_fixed_astro']
         params_bounds = config['sampling_config']['params_bounds']
         params_free = list(params_bounds.keys())
-
-        print('[minibatched] solving mock ODEs...',flush=True)
-        ### move this earlier -- maybe to read_trees or a utils module ?
-        minibatch_halo_index = jax.random.choice(jax.random.key(0), halo_index, (inference_config['Nbatch'],), replace=False)
         
-        ### mock mode 
+        ### set up mock or obs constraints
 
         # NOTE: not sure if defining this is necessary (can just use free_params_arr directly)?
         true_params = jnp.full(len(params_free),jnp.nan) # by default, there is no truth if not running in mock mode
         
-        if inference_config['mock'] is True:
+        if inference_config['fit_mock'] is True:
 
             true_params = free_params_arr
-            print('true mock parameters\n',free_params_arr,flush=True)
-
-            # note: batch_solve requires the full input parameters, not just subset true_params
-            tstart = timer()
-            mocksol = batch_solve(minibatch_halo_index,full_params_arr)
-            print(mocksol.ys[0][0][0],flush=True)
-            print('[minibatched] initial jit+sol took %.3f sec'%(timer()-tstart),flush=True)
-            
-            tstart = timer()
-            mocksol = batch_solve(minibatch_halo_index,full_params_arr)
-            print(mocksol.ys[0][0][0],flush=True)
-            print('[minibatched] jitted sol took %.3f sec'%(timer()-tstart),flush=True)            
+            print('true mock parameters\n',free_params_arr,flush=True)          
             
             print('summarizing mock data...',flush=True)
             # TO DO: push this import earlier, and use __init__ to load only summaries parent module
@@ -187,96 +169,67 @@ def run(config):
 
             # although these are mocks, we use the same obs_ prefix for consistency with rest of code below
             # NOTE: return order of obs_stats is same order as expected by sapphire.inference module below
-            obs_stats = gkr.summarize_mock(mocksol)
+            obs_stats = gkr.summarize_mock(sol)
 
-        """ otherwise add module to summarize input observations here """
-        ### obs_stats = gkr.summarize_obs(config) 
-        
-        print('setting up model for inference...',flush=True)
-
-        ### should push this down to sapphire.inference based on config, for explicit or ILI etc. 
-        loss_func, grad_loss_func, hess_loss_func = inference.explicit_likelihood.setup(config,minibatch_halo_index,obs_stats,batch_solve)
-
-        ### change this to also benchmark for non-mock (fitting obs)
-        ### and push this down to sapphire.utils or a new inference.coverage module or something 
-        
-        # by default nan's if not running in mock mode 
-        true_loss, true_grad_loss = jnp.nan, jnp.full(len(free_params_arr),jnp.nan)
-        
-        if inference_config['mock'] is True:
-            tstart = timer()
-            true_loss = loss_func(true_params)
-            tjit_loss = timer()-tstart
+        ### alternatively get obs_stats for data
+        elif inference_config['fit_obs'] is True: 
             
-            tstart = timer()
-            true_loss = loss_func(true_params)
-            tloss = timer()-tstart
+            print('reading observational constraints for %s'%config['obs_name'],flush=True)
+            from sapphire.utils import read_obs
+            obs_stats = read_obs.get(config)
 
-            print('[minibatched] true loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_loss,tjit_loss,tloss),flush=True)
-
-            tstart = timer()
-            true_grad_loss = grad_loss_func(true_params)
-            tjit_grad = timer()-tstart
-
-            tstart = timer()
-            true_grad_loss = grad_loss_func(true_params)
-            tgrad = timer()-tstart            
-            
-            print('[minibatched] true grad loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_grad_loss,tjit_grad,tgrad),flush=True)
-
-            tstart = timer()
-            true_hess_loss = hess_loss_func(true_params)
-            tjit_hess = timer()-tstart
-
-            tstart = timer()
-            true_hess_loss = hess_loss_func(true_params)
-            thess = timer()-tstart            
-            
-            print('[minibatched] true hess loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_hess_loss,tjit_hess,thess),flush=True)
-
-            true_hess_flag = jnp.all(jnp.linalg.eigvalsh(true_hess_loss)>0)
-            print('true_hess_flag',true_hess_flag,flush=True)
-            # return true_hess_flag
-
-            true_Finv = jnp.linalg.inv(true_hess_loss)
-            print('true_Finv',true_Finv,flush=True)
-
-        ####### TO DO: push this to a unit test somewhere
-        # params_bounds = config['sampling_config']['params_bounds']
-        # params_free = list(params_bounds.keys())
-
-        # print('full_params_arr\n',full_params_arr,flush=True)
-
-        # test_params = jnp.array([full_params_arr[0],full_params_arr[1],
-        #                          full_params_arr[4],full_params_arr[5],
-        #                          full_params_arr[8],full_params_arr[9],
-        #                          full_params_arr[12],full_params_arr[13]])
-
-        # test_params = test_params.at[0].set(jnp.log10(test_params[0]))
-        # test_params = test_params.at[2].set(jnp.log10(test_params[2]))
-        # test_params = test_params.at[4].set(jnp.log10(test_params[4]))
-        # test_params = test_params.at[6].set(jnp.log10(test_params[6]))        
-        
-        # print('test_params\n',test_params,flush=True)
-
-        
-        # test_params_dict = {params_free[i]:test_params[i] for i in range(len(params_free))}
-        # print('test_params_dict\n',test_params_dict,flush=True)
-
-        
-        # if inference_config['backend'] == 'numpyro':
-        #     test_loss = loss_func(test_params_dict)
-        #     test_grads = grad_loss_func(test_params_dict)
-        # elif inference_config['backend'] == 'manual':
-        #     test_loss = loss_func(test_params)
-        #     test_grads = grad_loss_func(test_params)
-        
-        # print('test_loss',test_loss,flush=True)
-        # print('test_grads\n',test_grads,flush=True)
-        
-        # return test_grads
-        
         if config['inference_config']['engine'] == 'adam':
+            
+            print('setting up model for adam...',flush=True)
+    
+            ### should push this down to sapphire.inference based on config, for explicit or ILI etc. 
+            loss_func, grad_loss_func, hess_loss_func = inference.explicit_likelihood.setup(config,halo_index,obs_stats,batch_solve)
+    
+            ### push this down to sapphire.utils or a new inference.coverage module or something 
+            
+            # by default nan's if not running in mock mode 
+            true_loss, true_grad_loss = jnp.nan, jnp.full(len(free_params_arr),jnp.nan)
+    
+            # TO DO: can this block be combined with the other fit_mock==True block above?
+            if inference_config['fit_mock'] is True:
+                tstart = timer()
+                true_loss = loss_func(true_params)
+                tjit_loss = timer()-tstart
+                
+                tstart = timer()
+                true_loss = loss_func(true_params)
+                tloss = timer()-tstart
+    
+                print('true loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_loss,tjit_loss,tloss),flush=True)
+    
+                tstart = timer()
+                true_grad_loss = grad_loss_func(true_params)
+                tjit_grad = timer()-tstart
+    
+                tstart = timer()
+                true_grad_loss = grad_loss_func(true_params)
+                tgrad = timer()-tstart            
+                
+                print('true grad loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_grad_loss,tjit_grad,tgrad),flush=True)
+    
+                tstart = timer()
+                true_hess_loss = hess_loss_func(true_params)
+                tjit_hess = timer()-tstart
+    
+                tstart = timer()
+                true_hess_loss = hess_loss_func(true_params)
+                thess = timer()-tstart            
+                
+                print('true hess loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_hess_loss,tjit_hess,thess),flush=True)
+    
+                true_hess_flag = jnp.all(jnp.linalg.eigvalsh(true_hess_loss)>0)
+                print('true_hess_flag',true_hess_flag,flush=True)
+                # return true_hess_flag
+    
+                true_Finv = jnp.linalg.inv(true_hess_loss)
+                print('true_Finv',true_Finv,flush=True)
+                
+        
             print('calling adam for MAP+Fisher...',flush=True)
 
             out_adam = inference.run_adam.setup(config,loss_func,grad_loss_func)
@@ -286,7 +239,7 @@ def run(config):
 
             ### compute posterior predictive checks at MAP 
             post_preds_map = inference.posterior_predictive_checks.adam_map_fisher(config,obs_stats,out_map_fisher,
-                                                                                   batch_solve,minibatch_halo_index)
+                                                                                   batch_solve,halo_index)
             
             ### write file if requested
             if inference_config['write_output'] == True:
@@ -307,8 +260,14 @@ def run(config):
 
 
         ### this whole thing (w/ adam above) needs to be pushed down to sapphire/inference module
-        elif config['inference_config']['engine'] == 'hmc':
-            print('calling numpyro for HMC...',flush=True)
+        elif config['inference_config']['engine'] == 'nuts':
+            print('calling numpyro for NUTS...',flush=True)
+
+            out_numpyro = inference.run_numpyro.setup(config,halo_index,obs_stats,batch_solve)
+
+            # TO DO: fix general out for interactive analysis
+            out_sapphire = out_numpyro
+            
 
         
         else:

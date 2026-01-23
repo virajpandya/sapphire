@@ -51,11 +51,11 @@ def setup(config,loss_func,grad_loss_func):
     # the conditional for shape makes it easier to deal with single guess (no need to access [0]) -- can be generalized later
     
     initial_params_dict = {pname: jax.random.uniform(init_keys[i], 
-                                                shape=() if inference_config['Nchain'] == 1 else (inference_config['Nchain'],),
+                                                shape=() if inference_config['Nadam'] == 1 else (inference_config['Nadam'],),
                                                 minval=plow, maxval=phigh)
                            for i, (pname, (plow, phigh)) in enumerate(params_bounds.items())}
 
-    ### rewrite initial_params from dict to array of shape (Nchain,Nfree) preserving parameter order
+    ### rewrite initial_params from dict to array of shape (Nadam,Nfree) preserving parameter order
     
     initial_params_arr = jnp.stack([initial_params_dict[k] for k in params_free], 
                                    axis=1)
@@ -162,7 +162,7 @@ def setup(config,loss_func,grad_loss_func):
         tstart = timer()
 
         ### on single CPU node (and maybe single GPU), process multiple adams sequentially
-        for ic_num in range(inference_config['Nchain']):
+        for ic_num in range(inference_config['Nadam']):
 
             ### get initial params dict for current chain
             # initial_params_this_dict = {k:initial_params[k][ic_num] for k in initial_params.keys()}

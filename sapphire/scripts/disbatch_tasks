@@ -1,2 +1,0 @@
-#DISBATCH PREFIX mocknum=$((DISBATCH_REPEAT_INDEX)) ; ( source activate jaxclone ; python -m sapphire --path_config "/mnt/ceph/users/vpandya/sapphire/sapphire/scripts/config.yaml" --mock_num $mocknum --rng_sample $mocknum --rng_init $((mocknum+1)) --flag_smhm 1 --flag_fgas 0 --flag_mzr 0 ) &> /mnt/ceph/users/vpandya/sapphire_outputs/logs/mock${mocknum}_100.log
-#DISBATCH REPEAT 100

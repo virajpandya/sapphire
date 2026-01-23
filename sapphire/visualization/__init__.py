@@ -1,1 +1,2 @@
-from . import coverage_adam
+from . import adam_coverage
+from . import numpyro_plots

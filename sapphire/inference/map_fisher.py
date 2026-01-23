@@ -44,7 +44,7 @@ def from_adam(config,hess_loss_func,out_adam,true_params):
 
 
     # can just get this from finali_3.shape ... 
-    Nchain = config['inference_config']['Nchain']
+    Nadam = config['inference_config']['Nadam']
     
     @jit
     @vmap
@@ -93,7 +93,7 @@ def from_adam(config,hess_loss_func,out_adam,true_params):
         
     
     # store just final losses
-    final_losses_3 = jnp.array([trace_loss_3[i][finali_3[i]-1] for i in range(Nchain)])
+    final_losses_3 = jnp.array([trace_loss_3[i][finali_3[i]-1] for i in range(Nadam)])
     
     # test call -- need to add vmap batch dimension (the vmap is over different Nmocks, not Nguesses)
     tstart = timer()
@@ -116,7 +116,7 @@ def from_adam(config,hess_loss_func,out_adam,true_params):
     sigma_map = jnp.sqrt(jnp.diag(Finv_adam))
 
     ### if mock mode, compute Finv at truth
-    if config['inference_config']['mock'] is True:
+    if config['inference_config']['fit_mock'] is True:
 
         hess_true_arr = hess_loss_func(true_params)
 
