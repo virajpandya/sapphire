@@ -33,7 +33,7 @@ plt.rcParams['ytick.right'] = True
 plt.rcParams['xtick.top'] = True
 
 # load sapphire modules that do not require dependency injection
-from sapphire.utils import read_config, write_results, read_trees
+from sapphire.utils import read_config
 
 # NOTE: this should be further modularized as needed, including any dependency injections (loading of modules based on config dict)
 def run(config):
@@ -52,40 +52,25 @@ def run(config):
     config = read_config.get(config,verbose=True) 
     
     # if multiple CPU cores requested, set environment flag (idiosyncrasy of jax on CPUs)
-    ### Can this now be done afterwards using jax_config below?
-    ########## This needs to be done up above, so import sapphire at the beginning of any ipynb prevents the num_cpus=1 issue
-    if config['num_cpus'] > 1:
-        print('setting xla_force_host_platform_device_count=%s'%config['num_cpus'],flush=True)
-        os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=%s"%config['num_cpus']
-
-    ### now load jax
     # NOTE: there has to be a cleaner, compact way to load all of these jax packages up top... 
-    from jax import config as jax_config
-    print('enabling float64 for jax',flush=True)
-    jax_config.update("jax_enable_x64", True) # required to accurately solve and take gradients through our diffeqs 
-
+    
     import jax    
     import jax.numpy as jnp
+
+    jax.config.update("jax_enable_x64", True) # required to accurately solve and take gradients through our diffeqs 
+    jax.config.update('jax_num_cpu_devices', config['num_cpus']) # newer jax versions don't need the XLA environment flag above
+    
     print('jax version',jax.__version__,flush=True)
     print('jax devices',jax.devices(),flush=True)
-    
-    # # if output directory does not already exist, create it
-    # if os.path.exists(config['output_path']) == False:
-    #     os.mkdir(config['output_path'])
 
     ### first create the output subdirs if requested
+    from sapphire.utils import write_results
     write_results.create_output_subdirs(config)
     
-    # load the relevant tree reading module
-    ### TO DO: push this to utils.read_trees 
-    # if config['tree_type'] == 'tng':
-    #     from sapphire.trees import jax_read_tng as tree_reader    
-    # else: # NOTE: glob and print a list of available tree_type strings based on modules available in read_trees subdirectory
-    #     raise ValueError('tree_type must be one of the types implemented in the trees module') 
-        
     # now read the trees into a dict where the key is halo name/ID and element is an astropy Table
     # read and interpolate into the required jax halo matrix format
     print('Reading trees and converting to jax matrices...',flush=True)
+    from sapphire.utils import read_trees
     halo_matrix, halo_coeff_matrix, halo_tinit, halo_index, ts_interp = read_trees.get(config)
         
     # use dependency injection to read in the requested physical model, then the associated parameter functions using dependency injection

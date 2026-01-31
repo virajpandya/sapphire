@@ -107,7 +107,7 @@ inference_config:
 
     ### numpyro HMC/NUTS options
     num_warmup: 2000
-    num_samples: 10000
+    num_samples: 2000
 
 
 ####### I moved these outside inference_config to avoid deep-merging dicts 
@@ -131,14 +131,14 @@ chain_num: 0
 
 ### sapphire/utils/read_data will read multiple files from here if fit_obs=True
 obs_name: 'lit' # manga
-obs_path: '/mnt/ceph/users/vpandya/sapphire/data/obs/literature/' # '/mnt/ceph/users/vpandya/sapphire/data/obs/manga/obs_stats_manga.npz'
+obs_path: '/mnt/ceph/users/vpandya/sapphire/data/obs/' 
 
 # where to store npz outputs, figures 
 # sapphire will automatically generate subdirectories for outputs, figures, 
 # NOTE: perhaps write a script that automates generation (and/or submission of) disbatch task file
 # NOTE: perhaps add more customization options here for prefix, suffix, generic filename format, etc.
 output_path: '/mnt/ceph/users/vpandya/sapphire_outputs/'
-output_suffix: '{flag_smhm}{flag_fgas}{flag_mzr}_fixsmhm_10K' # will be pre-pended by f so variables get filled in
+output_suffix: '{flag_smhm}{flag_fgas}{flag_mzr}_cutmvir12' # will be pre-pended by f so variables get filled in
 output_prefix: 'numpyro_{obs_name}_chain{chain_num}'
 
 # 

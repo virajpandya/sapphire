@@ -24,7 +24,7 @@ from diffrax import diffeqsolve, ODETerm, PIDController, SaveAt, Kvaerno3, Bosh3
 from diffrax import backward_hermite_coefficients, CubicInterpolation    
 from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
-from jax.sharding import Mesh, PartitionSpec, PositionalSharding, NamedSharding
+from jax.sharding import Mesh, PartitionSpec, NamedSharding
 
 # user requested only a single run, so just transform their input dict into jnp.array format with 10**A_X, etc. 
 def single_fixed(config):

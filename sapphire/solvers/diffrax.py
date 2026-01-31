@@ -25,7 +25,7 @@ from diffrax import diffeqsolve, ODETerm, PIDController, SaveAt, Kvaerno3, Bosh3
 from diffrax import backward_hermite_coefficients, CubicInterpolation    
 from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
-from jax.sharding import Mesh, PartitionSpec, PositionalSharding, NamedSharding
+from jax.sharding import Mesh, PartitionSpec, NamedSharding
 
 
 def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_halo_tinit, ts_interp):
@@ -137,7 +137,7 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
             print('parallelizing batch_solve with shard_map over multi-CPU/GPU for halos only',flush=True)
         
             # first set up device mesh
-            mesh = Mesh(mesh_utils.create_device_mesh(Ndevices,), axis_names=('i',))
+            mesh = Mesh(mesh_utils.create_device_mesh((Ndevices,)), axis_names=('i',))
         
             batch_solve = jit(shard_map(vmap(single_solve,in_axes=(0,None)),
                                         mesh=mesh,in_specs=(PartitionSpec('i'),PartitionSpec(None)),
@@ -159,7 +159,7 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
             print('parallelizing batch_solve over multiple CPU/GPU for params and halos')
             # first set up device mesh
             # Ndevices = jax.local_device_count()
-            mesh = Mesh(mesh_utils.create_device_mesh(Ndevices,), axis_names=('i',))
+            mesh = Mesh(mesh_utils.create_device_mesh((Ndevices,)), axis_names=('i',))
             
             # now shard_map over CPU/GPU devices available 
             batch_solve = jit(shard_map(vmap(vmap(single_solve,in_axes=(0,None)),in_axes=(None,0)),

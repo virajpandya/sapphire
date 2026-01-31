@@ -28,7 +28,7 @@ def main():
     parser.add_argument("--flag_mzr", type=int)  
     parser.add_argument("--chain_num", type=int)  
     parser.add_argument("--obs_name", type=str)  
-    parser.add_argument("--obs_path", type=str)  
+    # parser.add_argument("--obs_path", type=str)  
 
     # parse the known and unknown args
     # NOTE: add function to parse unknown args, assuming they follow same --key value structure on command line
