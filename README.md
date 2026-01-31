@@ -5,19 +5,19 @@ sapphire is a JAX-based dynamical model for the phase space evolution of galaxy 
 logo/banner is a work in progress ... 
 
 # Installation instructions 
-### <<< simplify and add example install script for JAX w/ CPU-only vs GPU support on mac, cluster, etc. >>>
+### <<< add instructions to install JAX w/ GPU support on cluster >>>
+### <<< add ```mamba env create -f environment.yml``` option >>>
 
-Until we have a public release that can be pip/conda installed, please do the following to install the private development version: 
-1. make sure you have a python=3.10 environment with the required dependencies given in environment.yml 
-2. ```git clone git@github.com:virajpandya/sapphire.git```  (NOTE: this is a private repo so you'll probably need your git login)
-3. in your .bashrc or .zshrc or .profile, add this line: ```export PYTHONPATH=$PYTHONPATH:"/PATH/TO/sapphire"```
-4. download the latest sapphire/data tarball from GitHub Releases, and do something like "tar -xzf sapphire-data-v1.0.tar.gz -C sapphire/" 
-
-#1 can easily be done by downloading miniconda, navigating to the cloned sapphire git directory and doing ```conda env create -f environment.yml```
-This will create a new environment called sapphire which you can activate by doing ```conda activate sapphire```. 
-
-#3 will enable you to do ```import sapphire``` in Python from anywhere on your system without needing to be in the cloned sapphire git directory. 
-Once we allow pip install, #2 and #3 will no longer be necessary except for maybe the private development branch.
+1. download and install mamba/conda-forge: https://conda-forge.org/download/
+2. CONDA_SUBDIR=osx-arm64 mamba create -n YOURENVNAME python=3.12 (skip the subdir part if not on macbook)
+3. mamba activate YOURENVNAME
+4. pip install jax jupyter matplotlib numpyro optax equinox flax pandas astropy chainconsumer pandas seaborn multiprocess arviz jax-cosmo diffrax
+5. python -m ipykernel install --user --name YOURENVNAME
+6. clone the sapphire repo and keep note of the path to the directory
+7. download the latest/corresponding sapphire/data tarball from GitHub Releases, and do something like "tar -xzf sapphire-data-v0.1.tar.gz -C /Users/viraj/sapphire/" 
+8. until we add a pip install option, in your .bashrc or .zshrc, add this line: ```export PYTHONPATH=$PYTHONPATH:"/PATH/TO/sapphire"```
+9. jupyter lab & (this will open jupyterlab in a browser window)
+10. try running/adapting one of the notebooks in demos/ or tests/
 
 # Overview of code layout and philosophy 
 sapphire is designed to be modular to maximize flexibility for assumed subgrid physics and for the numerics of how the ODEs are defined and solved.
