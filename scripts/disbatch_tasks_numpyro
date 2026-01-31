@@ -1,2 +1,2 @@
-#DISBATCH PREFIX chainnum=$((DISBATCH_REPEAT_INDEX)) ; ( source activate jaxclone ; python -m sapphire --path_config "/mnt/ceph/users/vpandya/sapphire/scripts/config.yaml" --chain_num $chainnum --flag_smhm 1 --flag_fgas 1 --flag_mzr 1 --obs_name "mix" ) &> /mnt/ceph/users/vpandya/sapphire_outputs/logs/numpyro_chain${chainnum}_111_mix_cutmvir12.log
+#DISBATCH PREFIX chainnum=$((DISBATCH_REPEAT_INDEX)) ; ( source activate japphire ; python -m sapphire --path_config "/mnt/ceph/users/vpandya/sapphire/scripts/config.yaml" --chain_num $chainnum --flag_smhm 1 --flag_fgas 1 --flag_mzr 1 --obs_name "mix" ) &> /mnt/ceph/users/vpandya/sapphire_outputs/logs/numpyro_chain${chainnum}_111_mix_cutmvir12_japphire.log
 #DISBATCH REPEAT 4

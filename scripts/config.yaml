@@ -138,7 +138,7 @@ obs_path: '/mnt/ceph/users/vpandya/sapphire/data/obs/'
 # NOTE: perhaps write a script that automates generation (and/or submission of) disbatch task file
 # NOTE: perhaps add more customization options here for prefix, suffix, generic filename format, etc.
 output_path: '/mnt/ceph/users/vpandya/sapphire_outputs/'
-output_suffix: '{flag_smhm}{flag_fgas}{flag_mzr}_cutmvir12' # will be pre-pended by f so variables get filled in
+output_suffix: '{flag_smhm}{flag_fgas}{flag_mzr}_cutmvir12_japphire' # will be pre-pended by f so variables get filled in
 output_prefix: 'numpyro_{obs_name}_chain{chain_num}'
 
 # 

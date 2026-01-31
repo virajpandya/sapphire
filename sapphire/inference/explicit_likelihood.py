@@ -25,7 +25,7 @@ from diffrax import diffeqsolve, ODETerm, PIDController, SaveAt, Kvaerno3, Bosh3
 from diffrax import backward_hermite_coefficients, CubicInterpolation    
 from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
-from jax.sharding import Mesh, PartitionSpec, PositionalSharding, NamedSharding
+from jax.sharding import Mesh, PartitionSpec, NamedSharding
 
 # this keeps it clean
 import sapphire.summaries.gaussian_kernel_regression as gkr
