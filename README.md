@@ -4,26 +4,51 @@ sapphire is a JAX-based dynamical model for the phase space evolution of galaxy 
 <img width="1080" alt="sapphire_jax_github" src="https://user-images.githubusercontent.com/4482189/219704156-47d53e16-34b3-4937-863c-e05570c685ea.png">
 logo/banner is a work in progress ... 
 
-# Installation instructions 
-### <<< add instructions to install JAX w/ GPU support on cluster >>>
-### <<< add ```mamba env create -f environment.yml``` option >>>
+## Installation instructions 
 
-1. download and install mamba/conda-forge: https://conda-forge.org/download/
-2. CONDA_SUBDIR=osx-arm64 mamba create -n YOURENVNAME python=3.12 (skip the subdir part if not on macbook)
-3. mamba activate YOURENVNAME
-4. pip install jax jupyter matplotlib numpyro optax equinox flax pandas astropy chainconsumer pandas seaborn multiprocess arviz jax-cosmo diffrax
-5. python -m ipykernel install --user --name YOURENVNAME
-6. clone the sapphire repo and keep note of the path to the directory
-7. download the latest/corresponding sapphire/data tarball from GitHub Releases, and do something like "tar -xzf sapphire-data-v0.1.tar.gz -C /Users/viraj/sapphire/" 
-8. until we add a pip install option, in your .bashrc or .zshrc, add this line: ```export PYTHONPATH=$PYTHONPATH:"/PATH/TO/sapphire"```
-9. jupyter lab & (this will open jupyterlab in a browser window)
-10. try running/adapting one of the notebooks in demos/ or tests/
+### pip install [CPU-only]
 
-# Overview of code layout and philosophy 
-sapphire is designed to be modular to maximize flexibility for assumed subgrid physics and for the numerics of how the ODEs are defined and solved.
+Until we put sapphire on PyPI, download/clone the sapphire repo and do
 
-### <<< add a basic flowchart/diagram showing the different code modules >>>
+```
+mamba activate yourenvname [highly recommended, see below]
+cd /path/to/sapphire/download
+pip install . 
+```
+This will put sapphire in your python path, so you can do ```import sapphire``` from anywhere. 
 
-# Basic usage 
-There are two main ways to run sapphire -- on the command line or via "import sapphire". See sapphire/scripts and sapphire/demo for examples. 
+Then, download the latest corresponding data tarball from GitHub Releases and do something like
+
+```
+tar -xvzf /path/to/downloaded/sapphire/data/tarball/ -C /path/to/sapphire
+```
+which will extract the required data files into the ```sapphire/data``` subdirectory (ideally the pip installation path). Alternatively, you can extract this tarball anywhere you want and then feed it as the runtime ```data_path``` argument (e.g., sapphire/scripts/config.yaml -- see below).
+
+We strongly recommend installing mamba from https://conda-forge.org/download/ to install a virtual environment with the necessary package dependencies listed in ```environment.yml```. You can automate the creation of a new mamba environment called "sapphire" by doing
+
+``` 
+CONDA_SUBDIR=osx-arm64 # this line is only if installing on MacOS
+mamba create -f environment.yml 
+```
+
+If you want to use sapphire in Jupyter notebooks, you may then also need to do something like
+
+```
+mamba activate yourenvname
+pip install jupyter jupyterlab
+python -m ipykernel install --user --name yourenvname
+```
+
+### Installation with GPU support
+<<< instructions forthcoming >>>
+
+## Quick example
+Go to https://binder.flatironinstitute.org/, enter "vpandya" for host user and "sapphire" for project name. This will automatically create an environment with the required python packages, so you only need to clone/upload and follow the pip installation instructions for sapphire and its data tarball.
+
+Then try running ```sapphire/demo/prior_predictive_checks.ipynb```. You will need to modify the paths in that ipynb and in ```sapphire/scripts/config.yaml``` to start with ```/home/jovyan/```
+
+## Documentation
+Link to GitHub Wiki or MkDocs/ReadTheDocs
+
+
 
