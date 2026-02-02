@@ -39,7 +39,7 @@ def read_manga(config): # Jan 16 - shift is to test systematic shifts for infere
         if shiftkey not in config:
             config[shiftkey] = 0.0
     
-    npz = jnp.load(os.path.join(config['obs_path'],'manga/obs_stats_manga.npz'),allow_pickle=True)
+    npz = jnp.load(os.path.join(config['data_path'],'obs/manga/obs_stats_manga.npz'),allow_pickle=True)
 
     ### Jan 21 2026 -- test impact of systematic shift up or down for SMHM using config['shift_XXX']
 
@@ -59,20 +59,20 @@ def read_manga(config): # Jan 16 - shift is to test systematic shifts for infere
 
 
 ### literature tables (these are unclear about uncertainties vs. scatter)
-def read_literature(config):
+def read_lit(config):
 
     ### SMHM: behroozi+19
-    tum = Table.read(os.path.join(config['obs_path'],'literature/smhm_a1.002312.dat'),format='ascii')
+    tum = Table.read(os.path.join(config['data_path'],'obs/lit/smhm_a1.002312.dat'),format='ascii')
     tum = tum[(tum['HM(0)']>=10.0) & (tum['HM(0)']<=12.1)]    
     # tum = tum[tum['HM(0)']>=11.3] # optional to be same as manga 
     
     ### ISM fgas: peeples+14 (this is scatter, not standard on mean)
-    tfgas = Table.read(os.path.join(config['obs_path'],'literature/peeples14.fgas.dat'),format='ascii')
+    tfgas = Table.read(os.path.join(config['data_path'],'obs/lit/peeples14.fgas.dat'),format='ascii')
     tfgas = tfgas[tfgas['logmstar']<11] # July 28 since we're not going so high anyway
     # tfgas = tfgas[tfgas['logmstar']>=9.0] # optional to be same as manga
     
     ### stellar MZR: Gallazzi+05 (this is scatter, not standard on mean)
-    tmzr = Table.read(os.path.join(config['obs_path'],'literature/stellarmet.gallazzi.dat'),format='ascii')
+    tmzr = Table.read(os.path.join(config['data_path'],'obs/lit/stellarmet.gallazzi.dat'),format='ascii')
     tmzr = tmzr[tmzr['logmstar']<11] # July 28 since we're not going so high anyway    
     
     ### compute x0 and bw for each
@@ -124,7 +124,7 @@ def read_literature(config):
 def read_mix(config):
 
     obs_manga = read_manga(config)
-    obs_lit = read_literature(config)
+    obs_lit = read_lit(config)
     obs_mix = (*obs_lit[:4], *obs_manga[4:])
     
     return obs_mix
@@ -138,7 +138,7 @@ def get(config):
         return read_manga(config)
 
     elif config['obs_name'] == 'lit':
-        return read_literature(config)
+        return read_lit(config)
 
     elif config['obs_name'] == 'mix':
         return read_mix(config)

@@ -21,7 +21,7 @@ from jax import jit, grad, vmap, pmap, debug, jvp, vjp, jacrev, jacfwd, make_jax
 from jax_cosmo.scipy.interpolate import InterpolatedUnivariateSpline    
 
 
-def interpolate_wiersma09():
+def interpolate_wiersma09(config):
     """
     This function reads and interpolates the Wiersma09 cooling functions found in the ./data/wiersma09/ subdirectory
     
@@ -29,8 +29,7 @@ def interpolate_wiersma09():
     """
     
     # first get the absolute path to the wiersma09 data subdirectory
-    path_abs = os.path.dirname(os.path.abspath(__file__)) # absolute path of the directory containing this file (read_coolfunc.py)
-    path_coolfuncs = os.path.join(path_abs,'../../data/coolfunc/wiersma09') # absolute path to wiersma09 data subdirectory 
+    path_coolfuncs = os.path.join(config['data_path'],'coolfunc/wiersma09') 
     
     ### glob the Wiersma+09 cooling tables for all redshifts
     files_W09 = glob('%s/z_*.hdf5'%path_coolfuncs)
@@ -97,11 +96,11 @@ def interpolate_wiersma09():
     # finally return this interpolator object for use in the parent module
     return coolfunc_W09
 
-def interpolate_sd93():  
+def interpolate_sd93(config):  
     
     # read the cooling table
     # rows = temperature, columns = gas metallicities log(Z/Zsun), units = erg cm^3 / s
-    tcool = Table.read(os.path.join(os.path.dirname(os.path.abspath(__file__)),'../../data/coolfunc/newcool.dat'),
+    tcool = Table.read(os.path.join(config['data_path'],'coolfunc/newcool.dat'),
                        format='ascii',
                        names=('logT','-99','-3','-2','-1.5','-1.0','-0.5','0.0','0.5',))
     # first convert tcool astropy Table into a 2D numpy array (this is the most elegant, easiest way I found to do this)
@@ -124,28 +123,28 @@ def interpolate_sd93():
 
     return rgi_sd93
 
-def interpolate_ploeckinger20(): 
+def interpolate_ploeckinger20(config): 
     
     # when implementing, remember to make sure the call signature (inputs) to resulting coolfunc interpolator object is same as fiducial coolfunc_W09    
     
     raise NotImplementedError('viraj will implement the Ploeckinger20 coolfunc soon')
 
 
-def get(coolfunc_name):
+def get(config):
     """
     This is the main function that will call the relevant interpolate_XXX() function from above 
     and return the coolfunc interpolator object to the parent module
     """
     
-    if coolfunc_name == 'wiersma09': 
+    if config['coolfunc'] == 'wiersma09': 
         # coolfunc = interpolate_wiersma09()
         raise NotImplementedError('needs to be jaxified')
         
-    elif coolfunc_name == 'sd93': 
-        coolfunc = interpolate_sd93()
+    elif config['coolfunc'] == 'sd93': 
+        coolfunc = interpolate_sd93(config)
         
-    elif coolfunc_name == 'ploeckinger20':
-        coolfunc = interpolate_ploeckinger20()
+    elif config['coolfunc'] == 'ploeckinger20':
+        coolfunc = interpolate_ploeckinger20(config)
         
     else:
         raise ValueError('Must be one of wiersma09, sd93, or ploeckinger20')

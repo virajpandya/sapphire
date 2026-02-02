@@ -4,10 +4,10 @@
 # unnecessary for GPUs (which jax auto-detects)
 num_cpus: 50 
 
-# path to jaxified merger trees 
-tree_path: '/mnt/ceph/users/vpandya/sapphire/data/trees/tng/'
+# path to sapphire data directory (typically /path/to/sapphire/data/)
+data_path: '/mnt/ceph/users/vpandya/sapphire/data/'
 
-# type of merger trees (see sapphire/trees/jax_read_trees.py)
+# which sapphire/data/trees/ subdirectory to use (see sapphire/trees/jax_read_trees.py)
 # NOTE: will try to enforce metadata in jaxified-sapphire tree format, so we can eventually remove this 
 tree_type: 'tng'
 
@@ -129,9 +129,8 @@ shift_mzr: 0.0
 ### chain_num and mock_num here for easy command line argparse without nested dicts...
 chain_num: 0
 
-### sapphire/utils/read_data will read multiple files from here if fit_obs=True
+### sapphire/utils/read_data will read multiple files from sapphire/data/obs/obs_name/ if fit_obs=True
 obs_name: 'lit' # manga
-obs_path: '/mnt/ceph/users/vpandya/sapphire/data/obs/' 
 
 # where to store npz outputs, figures 
 # sapphire will automatically generate subdirectories for outputs, figures, 

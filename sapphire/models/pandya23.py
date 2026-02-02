@@ -71,7 +71,7 @@ def setup(config):
     
     ### coolfunc
     from sapphire.utils import read_coolfunc
-    coolfunc = read_coolfunc.get(config['coolfunc']) 
+    coolfunc = read_coolfunc.get(config) 
     
     @jit
     def get_tdep(Vvir,redshift,A=3.0,alpha0=-3.0,alphaz=0.0,beta=-0.7): 

@@ -9,6 +9,7 @@ from astropy import units as u
 from astropy.cosmology import Planck15 
 from functools import partial 
 from timeit import default_timer as timer
+import os
 
 import jax
 import jax.numpy as jnp
@@ -41,8 +42,9 @@ def get(config):
     # Nbatches = 6 for TNG50, 5 for TNG100, 7 for TNG300 -- can also glob
     for ibatch in range(5):
         tstart = timer()
-        # *absolute* path to directory containing isotree_$subvolume.dat files 
-        tree_path = config['tree_path']+'tng100_subvolumes%s_jax.npz'%ibatch 
+        # *absolute* path to directory containing jaxified tree files 
+        # NOTE: should generalize this for different tree_name subdirs using '%s' wildcard as in visualization module
+        tree_path = os.path.join(config['data_path'],'trees/%s/tng100_subvolumes%s_jax.npz'%(config['tree_type'],ibatch)) 
         npz = jnp.load(tree_path,allow_pickle=True)
         
         list_halo_tinit.append(npz['halo_tinit'])

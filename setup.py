@@ -1,11 +1,11 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(name='sapphire',
-      version='0.1',
-      description='Sapphire',
+      version='0.11',
+      description='sapphire',
       url='https://github.com/virajpandya/sapphire',
       author='Viraj Pandya',
-      author_email='vgp2108@columbia.edu',
+      author_email='viraj.pandya@gmail.com',
       license='MIT',
-      packages=['sapphire'],
+      packages=find_packages(),
       zip_safe=False)
