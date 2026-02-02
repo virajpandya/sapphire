@@ -80,10 +80,10 @@ def read_lit(config):
     bw_smhm = 0.2 # jnp.diff(x0_smhm)[0] # all 0.2 dex for logmvir 
     
     x0_fgas = jnp.array(tfgas['logmstar'])
-    bw_fgas = jnp.mean(jnp.diff(tfgas['logmstar'])) # take mean for constant bin width for simplicity
+    bw_fgas = jnp.mean(jnp.diff(jnp.asarray(tfgas['logmstar']))) # take mean for constant bin width for simplicity
     
     x0_mzr = jnp.array(tmzr['logmstar'])
-    bw_mzr = jnp.mean(jnp.diff(tmzr['logmstar'])) # again take mean for constant bw for simplicity -- here its always 0.2
+    bw_mzr = jnp.mean(jnp.diff(jnp.asarray(tmzr['logmstar']))) # again take mean for constant bw for simplicity -- here its always 0.2
 
     ### extract average relation and uncertainties 
     # this is why I switched to manga -- because hard to find standard errors on fgas and mzr (these are scatter)
