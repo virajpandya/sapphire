@@ -1,8 +1,8 @@
 # sapphire
-sapphire is a JAX-based dynamical model for the phase space evolution of galaxy popoulations
+sapphire is a JAX-based framework for modeling the dynamical phase space evolution of galaxy populations. 
 
-<img width="1080" alt="sapphire_jax_github" src="https://user-images.githubusercontent.com/4482189/219704156-47d53e16-34b3-4937-863c-e05570c685ea.png">
-logo/banner is a work in progress ... 
+<img width="3200" height="1800" alt="pandya26_sapphire" src="https://github.com/user-attachments/assets/38b18df2-c097-4518-add2-f3493a2d948b" />
+Figure Credit: Viraj Pandya and Pandya et al. (2026).
 
 ## Installation instructions 
 
@@ -48,7 +48,7 @@ Go to https://binder.flatironinstitute.org/, enter "vpandya" for host user and "
 Then try running ```sapphire/demo/prior_predictive_checks.ipynb```. You will need to modify the paths in that ipynb and in ```sapphire/scripts/config.yaml``` to start with ```/home/jovyan/```
 
 ## Documentation
-Link to GitHub Wiki or MkDocs/ReadTheDocs
+Link to GitHub Wiki or MkDocs/ReadTheDocs forthcoming
 
 
 
