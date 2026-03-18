@@ -1,0 +1,76 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Pandya"
+  given-names: "Viraj"
+  orcid: "https://orcid.org/0000-0002-2499-9205"
+title: "sapphire"
+version: 0.12
+doi: 10.5281/zenodo.1234
+date-released: 2025-04-06
+url: "https://github.com/virajpandya/sapphire"
+
+# main paper reference -- update this once submitted/published
+preferred-citation:
+  type: article
+  authors:
+  - family-names: "Pandya et al."
+    given-names: "Viraj"
+    orcid: "https://orcid.org/0000-0002-2499-9205"
+  doi: "10.0000/00000"
+  journal: "The Astrophysical Journal"
+  month: 9
+  start: 1 # First page number
+  end: 10 # Last page number
+  title: "Introducing sapphire: Towards Hybrid Physics-Informed, Data-Driven Modeling of Galaxy Formation"
+  issue: 1
+  volume: 1
+  year: 2026
+
+# Viraj Pandya's PhD thesis and related papers leading to sapphire 
+references:
+
+  - type: thesis
+    title: "Semi-Analytic Modeling of Galaxy Formation for the Future: The Challenge of Emulating Cosmological Hydrodynamical Simulations"
+    authors:
+      - family-names: "Pandya"
+        given-names: "Viraj"
+    school: "University of California, Santa Cruz"
+    year: 2021
+    month: 8
+
+  - type: article
+    title: "First Results from SMAUG: The Need for Preventative Stellar Feedback and Improved Baryon Cycling in Semianalytic Models of Galaxy Formation"
+    authors:
+      - family-names: "Pandya et al."
+        given-names: "Viraj"
+    journal: "The Astrophysical Journal"  
+    volume: 905
+    issue: 1
+    year: 2020
+    month: 12
+
+  - type: article
+    title: "Characterizing mass, momentum, energy, and metal outflow rates of multiphase galactic winds in the FIRE-2 cosmological simulations"
+    authors:
+      - family-names: "Pandya et al."
+        given-names: "Viraj"
+    journal: "Monthly Notices of the Royal Astronomical Society"  
+    volume: 508
+    issue: 2
+    year: 2021
+    month: 12
+
+  - type: article
+    title: "A Unified Model for the Coevolution of Galaxies and Their Circumgalactic Medium: The Relative Roles of Turbulence and Atomic Cooling Physics"
+    authors:
+      - family-names: "Pandya et al."
+        given-names: "Viraj"
+    journal: "The Astrophysical Journal"  
+    volume: 956
+    issue: 2
+    year: 2023
+    month: 10 
+  
+
+  
