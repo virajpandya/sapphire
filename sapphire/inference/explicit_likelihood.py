@@ -54,25 +54,34 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
     Lflag_smhm = config['flag_smhm'] 
     Lflag_fgas = config['flag_fgas'] 
     Lflag_mzr = config['flag_mzr']   
+    Lflag_sfms = config['flag_sfms']   
+    Lflag_mzr_gas = config['flag_mzr_gas']  
 
-    Nbatch = inference_config['Nbatch']
+    Nbatch = config['Nbatch']
 
     ### unpack input observed (or mock) summary statistics
     (obs_x0_smhm,obs_bw_smhm,obs_avg_smhm,obs_err_smhm,
      obs_x0_fgas,obs_bw_fgas,obs_avg_fgas,obs_err_fgas,
-     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr) = obs_stats
+     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr, 
+     obs_x0_sfms,obs_bw_sfms,obs_avg_sfms,obs_err_sfms, 
+     obs_x0_mzr_gas,obs_bw_mzr_gas,obs_avg_mzr_gas,obs_err_mzr_gas) = obs_stats
 
     # print('raw mock obs_err',obs_err_smhm,obs_err_fgas,obs_err_mzr,flush=True)
     
-    ### IF MOCK MODE -- change obs_err_* to the user supplied constant or scalar
-    #   (or have user add x-dependent function in sapphire.summaries and import here)
-    if inference_config['fit_mock'] is True and inference_config['fit_obs'] is False: # checking both as safeguard
+    # these are added in quadrature (should be 0 by default)
+    mock_err_smhm = config['mock_err_smhm']
+    mock_err_fgas = config['mock_err_fgas']
+    mock_err_mzr = config['mock_err_mzr']
+    mock_err_sfms = config['mock_err_sfms']
+    mock_err_mzr_gas = config['mock_err_mzr_gas']
 
-        # unclear how to use "scale" since that needs to be multiplied by intrinsic stderr(y) inside 
-        # might need to add that as static (non-jit-traced) input to logL functions below
-        obs_err_smhm = config['obs_err_smhm']
-        obs_err_fgas = config['obs_err_fgas']
-        obs_err_mzr = config['obs_err_mzr']
+    ### optionally, if running in mock mode, zero out obs_errs and let user do their mock_err below [or this can be kept, if user desires]
+    if inference_config['fit_mock'] == True:
+        obs_err_smhm = 0.0
+        obs_err_fgas = 0.0
+        obs_err_mzr = 0.0
+        obs_err_sfms = 0.0
+        obs_err_mzr_gas = 0.0
     
     # uniform prior
     # @jit
@@ -124,25 +133,31 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
         shsol = batch_solve(minibatch_halo_index, full_params)
     
         """ July 14 -- more compact using functions above """
-        z0_Mvir, z0_smhm, fail_flag, Nfail, z0_Mstar, z0_fgas, z0_mzr = gkr.extract_quantities(shsol)
+        z0_Mvir, z0_smhm, fail_flag, Nfail, z0_Mstar, z0_fgas, z0_mzr, z0_Mdot_sfr, z0_mzr_gas = gkr.extract_quantities(shsol)
     
-        pred_avg_smhm, pred_err_smhm = gkr.nadaraya_watson(z0_Mvir, z0_smhm, obs_x0_smhm, obs_bw_smhm)
-        pred_avg_fgas, pred_err_fgas = gkr.nadaraya_watson(z0_Mstar, z0_fgas, obs_x0_fgas, obs_bw_fgas)
-        pred_avg_mzr, pred_err_mzr = gkr.nadaraya_watson(z0_Mstar, z0_mzr, obs_x0_mzr, obs_bw_mzr)    
+        pred_avg_smhm, pred_err_smhm = gkr.nadaraya_watson(z0_Mvir, z0_smhm, obs_x0_smhm, obs_bw_smhm) 
+        pred_avg_fgas, pred_err_fgas = gkr.nadaraya_watson(z0_Mstar, z0_fgas, obs_x0_fgas, obs_bw_fgas) 
+        pred_avg_mzr, pred_err_mzr = gkr.nadaraya_watson(z0_Mstar, z0_mzr, obs_x0_mzr, obs_bw_mzr) 
+        pred_avg_sfms, pred_err_sfms = gkr.nadaraya_watson(z0_Mstar, z0_Mdot_sfr, obs_x0_sfms, obs_bw_sfms) 
+        pred_avg_mzr_gas, pred_err_mzr_gas = gkr.nadaraya_watson(z0_Mstar, z0_mzr_gas, obs_x0_mzr_gas, obs_bw_mzr_gas) 
 
         ### NEED TO ADD ACTUAL OBS QUADRATURE SUM OPTION HERE (AS for numpyro below)
-        tot_err_smhm = jnp.sqrt(pred_err_smhm**2 + obs_err_smhm**2)
-        tot_err_fgas = jnp.sqrt(pred_err_fgas**2 + obs_err_fgas**2)
-        tot_err_mzr = jnp.sqrt(pred_err_mzr**2 + obs_err_mzr**2)        
+        tot_err_smhm = jnp.sqrt(pred_err_smhm**2 + obs_err_smhm**2 + mock_err_smhm**2)
+        tot_err_fgas = jnp.sqrt(pred_err_fgas**2 + obs_err_fgas**2 + mock_err_fgas**2)
+        tot_err_mzr = jnp.sqrt(pred_err_mzr**2 + obs_err_mzr**2 + mock_err_mzr**2)
+        tot_err_sfms = jnp.sqrt(pred_err_sfms**2 + obs_err_sfms**2 + mock_err_sfms**2)
+        tot_err_mzr_gas = jnp.sqrt(pred_err_mzr_gas**2 + obs_err_mzr_gas**2 + mock_err_mzr_gas**2)            
     
         # compute masked summed logL for each observable separately
         logL_smhm = -0.5*jnp.sum(((pred_avg_smhm-obs_avg_smhm)/tot_err_smhm)**2 + jnp.log(2*jnp.pi*tot_err_smhm**2))
         logL_fgas = -0.5*jnp.sum(((pred_avg_fgas-obs_avg_fgas)/tot_err_fgas)**2 + jnp.log(2*jnp.pi*tot_err_fgas**2))
-        logL_mzr  = -0.5*jnp.sum(((pred_avg_mzr-obs_avg_mzr)/tot_err_mzr)**2 + jnp.log(2*jnp.pi*tot_err_mzr**2))
+        logL_mzr = -0.5*jnp.sum(((pred_avg_mzr-obs_avg_mzr)/tot_err_mzr)**2 + jnp.log(2*jnp.pi*tot_err_mzr**2))
+        logL_sfms = -0.5*jnp.sum(((pred_avg_sfms-obs_avg_sfms)/tot_err_sfms)**2 + jnp.log(2*jnp.pi*tot_err_sfms**2))
+        logL_mzr_gas = -0.5*jnp.sum(((pred_avg_mzr_gas-obs_avg_mzr_gas)/tot_err_mzr_gas)**2 + jnp.log(2*jnp.pi*tot_err_mzr_gas**2))
         
         # Dec 6 -- return logL itself, not negative, since we will convert to log_posterior later
         # July 24 -- here multiply by Lflag_XXX to zero out different constraints 
-        return Lflag_smhm*logL_smhm + Lflag_fgas*logL_fgas + Lflag_mzr*logL_mzr
+        return Lflag_smhm*logL_smhm + Lflag_fgas*logL_fgas + Lflag_mzr*logL_mzr + Lflag_sfms*logL_sfms + Lflag_mzr_gas*logL_mzr_gas
     
     
     ### our loss will be negative log-posterior = negative * (log-likelihood + log_prior)

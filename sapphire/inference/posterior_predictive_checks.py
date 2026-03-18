@@ -41,7 +41,16 @@ def adam_map_fisher(config,obs_stats,out_map_fisher,batch_solve,minibatch_halo_i
     # unpack input observed (or mock) summary statistics (this provides bandwidths)
     (obs_x0_smhm,obs_bw_smhm,obs_avg_smhm,obs_err_smhm,
      obs_x0_fgas,obs_bw_fgas,obs_avg_fgas,obs_err_fgas,
-     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr) = obs_stats
+     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr, 
+     obs_x0_sfms,obs_bw_sfms,obs_avg_sfms,obs_err_sfms, 
+     obs_x0_mzr_gas,obs_bw_mzr_gas,obs_avg_mzr_gas,obs_err_mzr_gas) = obs_stats
+
+    # these are added in quadrature (should be 0 by default)
+    mock_err_smhm = config['mock_err_smhm']
+    mock_err_fgas = config['mock_err_fgas']
+    mock_err_mzr = config['mock_err_mzr']
+    mock_err_sfms = config['mock_err_sfms']
+    mock_err_mzr_gas = config['mock_err_mzr_gas']    
     
     
     # unpack out_map_fisher (see return signature of sapphire/inference/map_fisher.py)
@@ -83,14 +92,19 @@ def adam_map_fisher(config,obs_stats,out_map_fisher,batch_solve,minibatch_halo_i
 
     # extract discrete pointwise quantities and compute summary statistics (using obs/mock bandwidths)
     # NOTE: this needs to be generalized for other quantities, summary statistics, etc. 
-    map_z0_Mvir, map_z0_smhm, map_fail_flag, map_Nfail, map_z0_Mstar, map_z0_fgas, map_z0_mzr = gkr.extract_quantities(sol_map)
+    # map_z0_Mvir, map_z0_smhm, map_fail_flag, map_Nfail, map_z0_Mstar, map_z0_fgas, map_z0_mzr = gkr.extract_quantities(sol_map)
+    (map_z0_Mvir, map_z0_smhm, map_fail_flag, map_Nfail, map_z0_Mstar, 
+     map_z0_fgas, map_z0_mzr, map_z0_Mdot_sfr, map_z0_mzr_gas) = gkr.extract_quantities(sol_map)
     
-    map_avg_smhm, map_err_smhm = gkr.nadaraya_watson(map_z0_Mvir, map_z0_smhm, obs_x0_smhm, obs_bw_smhm)
-    map_avg_fgas, map_err_fgas = gkr.nadaraya_watson(map_z0_Mstar, map_z0_fgas, obs_x0_fgas, obs_bw_fgas)
-    map_avg_mzr, map_err_mzr = gkr.nadaraya_watson(map_z0_Mstar, map_z0_mzr, obs_x0_mzr, obs_bw_mzr)
+    map_avg_smhm, map_err_smhm = gkr.nadaraya_watson(map_z0_Mvir, map_z0_smhm, obs_x0_smhm, obs_bw_smhm) 
+    map_avg_fgas, map_err_fgas = gkr.nadaraya_watson(map_z0_Mstar, map_z0_fgas, obs_x0_fgas, obs_bw_fgas) 
+    map_avg_mzr, map_err_mzr = gkr.nadaraya_watson(map_z0_Mstar, map_z0_mzr, obs_x0_mzr, obs_bw_mzr) 
+    map_avg_sfms, map_err_sfms = gkr.nadaraya_watson(map_z0_Mstar, map_z0_Mdot_sfr, obs_x0_sfms, obs_bw_sfms) 
+    map_avg_mzr_gas, map_err_mzr_gas = gkr.nadaraya_watson(map_z0_Mstar, map_z0_mzr_gas, obs_x0_mzr_gas, obs_bw_mzr_gas) 
     
     return (map_z0_Mvir, map_z0_smhm, map_Nfail, map_z0_Mstar, map_z0_fgas, map_z0_mzr,
-            map_avg_smhm, map_err_smhm, map_avg_fgas, map_err_fgas, map_avg_mzr, map_err_mzr)
+            map_avg_smhm, map_err_smhm, map_avg_fgas, map_err_fgas, map_avg_mzr, map_err_mzr,
+            map_avg_sfms, map_err_sfms, map_avg_mzr_gas, map_err_mzr_gas) 
 
 
 

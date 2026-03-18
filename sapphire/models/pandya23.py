@@ -39,12 +39,17 @@ from jax.sharding import Mesh, PartitionSpec, NamedSharding
 
 def setup(config):
 
+    ### Feb 16, 2026 -- for new forecasting tests 
+    if 'clip_etaE_max' not in config.keys():
+        config['clip_etaE_max'] = 1.0 # clip etaE at 1.0, unless higher max requested
+
     # set global fixed parameters 
     params_fixed_astro = config['params_fixed_astro']
     alpha_n = params_fixed_astro['alpha_n'] # slope of CGM density power law 
     alpha_T = params_fixed_astro['alpha_T'] # slope of CGM temperature power law 
     f_recycle = params_fixed_astro['f_recycle'] # instantaneous stellar-->ISM recycling fraction 
     yZ = params_fixed_astro['yZ'] # metal yield of 1 SN per 100 Msun of stars formed (2 Msun / 100 Msun = 0.02 for 10 Msun of SN ejecta) 
+    A_Zin_halo = params_fixed_astro['A_Zin_halo'] # pre-enrichment metallicity that multiplies Mdot_in_halo, default 0.25 from Pandya+23 
 
     
     ### define constants and conversions 
@@ -100,7 +105,9 @@ def setup(config):
         We don't want etaE to exceed 1 (which it might for certain slopes and normalizations) so we use jnp.minimum
         """
         alpha = alpha0 + alphaz*(1+redshift)
-        return jnp.clip(A * (Vvir/125.)**alpha * (1+redshift)**beta,None,1.0) # Aug 14, 2024 - jnp.max -> jnp.clip
+        # Aug 14, 2024: jnp.max -> jnp.clip
+        # Feb 16, 2026: allow this to exceed one for tests
+        return jnp.clip(A * (Vvir/125.)**alpha * (1+redshift)**beta,None,config['clip_etaE_max']) 
     
     @jit 
     def get_etaZ_ism(Vvir,redshift,A=0.5,alpha0=0.0,alphaz=0.0,beta=0.0): # this is the Carr/Bryan approach for increasing Zwind > Zism 
@@ -299,7 +306,8 @@ def setup(config):
         etaZ_ism = get_etaZ_ism(Vvir,redshift,A=etaZ_A,alpha0=etaZ_alpha0,alphaz=etaZ_alphaz,beta=etaZ_beta) # dimensionless        
     
         # get halo inflow metallicity from FIRE scaling because we don't yet have outer halo wind recycling
-        Zin_halo = get_Zin_halo(Vvir,redshift) # dimensionless Zdot/Mdot (*not* normalized to Zsun)
+        # dimensionless Zdot/Mdot (*not* normalized to Zsun)
+        Zin_halo = get_Zin_halo(Vvir,redshift,A=A_Zin_halo) 
         
         # compute log10 of CGM metallicity normalized to Zsun for cooling function
         log_Zcgm = jnp.log10(MZ_cgm / M_cgm / 0.02)

@@ -35,27 +35,40 @@ import jax.numpy as jnp
 def read_manga(config): # Jan 16 - shift is to test systematic shifts for inference
 
     # Jan 22 - for backward compatibility before I added these forecasting keys
-    for shiftkey in ['shift_smhm','shift_fgas','shift_mzr']:
+    for shiftkey in ['shift_smhm','shift_fgas','shift_mzr','shift_sfms','shift_mzr_gas']:
         if shiftkey not in config:
             config[shiftkey] = 0.0
+
+    for scalekey in ['scale_err_smhm','scale_err_fgas','scale_err_mzr','scale_err_sfms','scale_err_mzr_gas']:
+        if scalekey not in config:
+            config[scalekey] = 1.0    
     
     npz = jnp.load(os.path.join(config['data_path'],'obs/manga/obs_stats_manga.npz'),allow_pickle=True)
 
     ### Jan 21 2026 -- test impact of systematic shift up or down for SMHM using config['shift_XXX']
+    # March 10 2026 -- also scale obs_err [ different from adding extra error in quad sum for mocks ]
 
     # NOTE: the return order should be same as expected by sapphire.inference modules (for the "obs_stats" collection)
     return (jnp.asarray(npz['obs_x0_smhm']),
             npz['obs_bw_smhm'].item(),
             jnp.asarray(npz['obs_avg_smhm'])+config['shift_smhm'], # shift_XXX=0.0 is default
-            jnp.asarray(npz['obs_err_smhm']),
+            jnp.asarray(npz['obs_err_smhm'])*config['scale_err_smhm'],
             jnp.asarray(npz['obs_x0_Rgas']),
             npz['obs_bw_Rgas'].item(),
             jnp.asarray(npz['obs_avg_Rgas'])+config['shift_fgas'],
-            jnp.asarray(npz['obs_err_Rgas']),
+            jnp.asarray(npz['obs_err_Rgas'])*config['scale_err_fgas'],
             jnp.asarray(npz['obs_x0_mzr']),
             npz['obs_bw_mzr'].item(),
             jnp.asarray(npz['obs_avg_mzr'])+config['shift_mzr'],
-            jnp.asarray(npz['obs_err_mzr']))
+            jnp.asarray(npz['obs_err_mzr'])*config['scale_err_mzr'],
+            jnp.asarray(npz['obs_x0_sfms']),
+            npz['obs_bw_sfms'].item(),
+            jnp.asarray(npz['obs_avg_sfms'])+config['shift_sfms'],
+            jnp.asarray(npz['obs_err_sfms'])*config['scale_err_sfms'],
+            jnp.asarray(npz['obs_x0_mzr_gas']),
+            npz['obs_bw_mzr_gas'].item(),
+            jnp.asarray(npz['obs_avg_mzr_gas'])+config['shift_mzr_gas'],
+            jnp.asarray(npz['obs_err_mzr_gas'])*config['scale_err_mzr_gas'])
 
 
 ### literature tables (these are unclear about uncertainties vs. scatter)
@@ -64,7 +77,7 @@ def read_lit(config):
     ### SMHM: behroozi+19
     tum = Table.read(os.path.join(config['data_path'],'obs/lit/smhm_a1.002312.dat'),format='ascii')
     tum = tum[(tum['HM(0)']>=10.0) & (tum['HM(0)']<=12.1)]    
-    # tum = tum[tum['HM(0)']>=11.3] # optional to be same as manga 
+    # tum = tum[tum['HM(0)']>=11.3] # optional to be same as manga SF completeness region
     
     ### ISM fgas: peeples+14 (this is scatter, not standard on mean)
     tfgas = Table.read(os.path.join(config['data_path'],'obs/lit/peeples14.fgas.dat'),format='ascii')
@@ -114,10 +127,32 @@ def read_lit(config):
     ### take max at each x0 for symmetric upper limit on error
     obs_mzr_err = jnp.maximum(obs_mzr_low,obs_mzr_high)
 
+    # Jan 22 - for backward compatibility before I added these forecasting keys
+    for shiftkey in ['shift_smhm','shift_fgas','shift_mzr','shift_sfms','shift_mzr_gas']:
+        if shiftkey not in config:
+            config[shiftkey] = 0.0
+
+    for scalekey in ['scale_err_smhm','scale_err_fgas','scale_err_mzr','scale_err_sfms','scale_err_mzr_gas']:
+        if scalekey not in config:
+            config[scalekey] = 1.0     
+
     # NOTE: the return order should be same as expected by sapphire.inference modules (for the "obs_stats" collection)
-    return (x0_smhm,bw_smhm,obs_smhm,obs_smhm_err,
-            x0_fgas,bw_fgas,obs_fgas,obs_fgas_err,
-            x0_mzr,bw_mzr,obs_mzr,obs_mzr_err)
+    # March 10 -- also apply rescale factor to obs_errs [different from mock_err that gets quad summed in run_numpyro or explicit_likelihood]
+    return (x0_smhm,
+            bw_smhm,
+            obs_smhm+config['shift_smhm'],
+            obs_smhm_err*config['scale_err_smhm'],
+            x0_fgas,
+            bw_fgas,
+            obs_fgas+config['shift_fgas'],
+            obs_fgas_err*config['scale_err_fgas'],
+            x0_mzr,
+            bw_mzr,
+            obs_mzr+config['shift_mzr'],
+            obs_mzr_err*config['scale_err_mzr'],
+            ### feb 27 - no fiducial literature sfms and mzr_gas yet
+            jnp.nan,jnp.nan,jnp.nan,jnp.nan,
+            jnp.nan,jnp.nan,jnp.nan,jnp.nan)
 
 
 # Jan 29 -- behroozi for smhm, manga for fgas and mzr

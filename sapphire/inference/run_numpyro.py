@@ -69,31 +69,41 @@ def setup(config,halo_index,obs_stats,batch_solve):
     Lflag_smhm = config['flag_smhm'] 
     Lflag_fgas = config['flag_fgas'] 
     Lflag_mzr = config['flag_mzr']   
+    Lflag_sfms = config['flag_sfms']   
+    Lflag_mzr_gas = config['flag_mzr_gas']       
 
     Nbatch = config['Nbatch']
 
     ### unpack input observed (or mock) summary statistics
     (obs_x0_smhm,obs_bw_smhm,obs_avg_smhm,obs_err_smhm,
      obs_x0_fgas,obs_bw_fgas,obs_avg_fgas,obs_err_fgas,
-     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr) = obs_stats
+     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr, 
+     obs_x0_sfms,obs_bw_sfms,obs_avg_sfms,obs_err_sfms, 
+     obs_x0_mzr_gas,obs_bw_mzr_gas,obs_avg_mzr_gas,obs_err_mzr_gas) = obs_stats
+
+    ### optionally, if running in mock mode, zero out obs_errs and let user do their mock_err below [or this can be kept, if user desires]
+    if inference_config['fit_mock'] == True:
+        obs_err_smhm = 0.0
+        obs_err_fgas = 0.0
+        obs_err_mzr = 0.0
+        obs_err_sfms = 0.0
+        obs_err_mzr_gas = 0.0
 
     # print('raw mock obs_err',obs_err_smhm,obs_err_fgas,obs_err_mzr,flush=True)
     
-    ### IF MOCK MODE -- change obs_err_* to the user supplied constant or scalar
-    #   (or have user add x-dependent function in sapphire.summaries and import here)
-    if inference_config['fit_mock'] is True and inference_config['fit_obs'] is False: # checking both as safeguard
-
-        # unclear how to use "scale" since that needs to be multiplied by intrinsic stderr(y) inside 
-        # might need to add that as static (non-jit-traced) input to logL functions below
-        obs_err_smhm = config['obs_err_smhm']
-        obs_err_fgas = config['obs_err_fgas']
-        obs_err_mzr = config['obs_err_mzr']
+    # these are added in quadrature (should be 0 by default)
+    mock_err_smhm = config['mock_err_smhm']
+    mock_err_fgas = config['mock_err_fgas']
+    mock_err_mzr = config['mock_err_mzr']
+    mock_err_sfms = config['mock_err_sfms']
+    mock_err_mzr_gas = config['mock_err_mzr_gas']    
         
         
     """ define the numpyro model """
     
     # note: these input obs can be different from the obs_ ones returned above
-    def model(obs_avg_smhm,obs_err_smhm,obs_avg_fgas,obs_err_fgas,obs_avg_mzr,obs_err_mzr):
+    def model(obs_avg_smhm,obs_err_smhm,obs_avg_fgas,obs_err_fgas,obs_avg_mzr,obs_err_mzr,
+              obs_avg_sfms,obs_err_sfms,obs_avg_mzr_gas,obs_err_mzr_gas):
         
         ### sample the free parameters assuming their respective Uniform priors 
         # the user should change the prior sampling function as needed...
@@ -123,34 +133,45 @@ def setup(config,halo_index,obs_stats,batch_solve):
         shsol = batch_solve(halo_index, full_params)
     
         """ July 14 -- more compact using functions above """
-        z0_Mvir, z0_smhm, fail_flag, Nfail, z0_Mstar, z0_fgas, z0_mzr = gkr.extract_quantities(shsol)
+        z0_Mvir, z0_smhm, fail_flag, Nfail, z0_Mstar, z0_fgas, z0_mzr, z0_Mdot_sfr, z0_mzr_gas = gkr.extract_quantities(shsol)
     
         numpyro.deterministic('Nfail', Nfail)    
     
         ### July 24 -- evaluate now using observed x0 and bin(=band) widths
         pred_avg_smhm, pred_err_smhm = gkr.nadaraya_watson(z0_Mvir, z0_smhm, obs_x0_smhm, obs_bw_smhm)
         pred_avg_fgas, pred_err_fgas = gkr.nadaraya_watson(z0_Mstar, z0_fgas, obs_x0_fgas, obs_bw_fgas)
-        pred_avg_mzr, pred_err_mzr = gkr.nadaraya_watson(z0_Mstar, z0_mzr, obs_x0_mzr, obs_bw_mzr) 
+        # pred_avg_mzr, pred_err_mzr = gkr.nadaraya_watson(z0_Mstar, z0_mzr, obs_x0_mzr, obs_bw_mzr) 
+        # pred_avg_sfms, pred_err_sfms = gkr.nadaraya_watson(z0_Mstar, z0_Mdot_sfr, obs_x0_sfms, obs_bw_sfms) 
+        pred_avg_mzr_gas, pred_err_mzr_gas = gkr.nadaraya_watson(z0_Mstar, z0_mzr_gas, obs_x0_mzr_gas, obs_bw_mzr_gas) 
     
         """ July 24 -- quadrature sum intrinsic model standard error with observed uncertainty """ 
         ### NEED TO UPDATE THIS TO GENERALLY HANDLE MOCKED OR ACTUAL OBSERVED EXTRA ERROR 
-        tot_err_smhm = jnp.sqrt(pred_err_smhm**2 + obs_err_smhm**2)
-        tot_err_fgas = jnp.sqrt(pred_err_fgas**2 + obs_err_fgas**2)
-        tot_err_mzr = jnp.sqrt(pred_err_mzr**2 + obs_err_mzr**2)
+        tot_err_smhm = jnp.sqrt(pred_err_smhm**2 + obs_err_smhm**2 + mock_err_smhm**2) 
+        tot_err_fgas = jnp.sqrt(pred_err_fgas**2 + obs_err_fgas**2 + mock_err_fgas**2) 
+        # tot_err_mzr = jnp.sqrt(pred_err_mzr**2 + obs_err_mzr**2 + mock_err_mzr**2) 
+        # tot_err_sfms = jnp.sqrt(pred_err_sfms**2 + obs_err_sfms**2 + mock_err_sfms**2) 
+        tot_err_mzr_gas = jnp.sqrt(pred_err_mzr_gas**2 + obs_err_mzr_gas**2 + mock_err_mzr_gas**2) 
 
         # to save as part of outputs 
         numpyro.deterministic('pred_avg_smhm',pred_avg_smhm)
         numpyro.deterministic('pred_avg_fgas',pred_avg_fgas)
-        numpyro.deterministic('pred_avg_mzr',pred_avg_mzr)
+        # numpyro.deterministic('pred_avg_mzr',pred_avg_mzr)
+        # numpyro.deterministic('pred_avg_sfms',pred_avg_sfms)
+        numpyro.deterministic('pred_avg_mzr_gas',pred_avg_mzr_gas)
+        
         numpyro.deterministic('pred_err_smhm',pred_err_smhm)
         numpyro.deterministic('pred_err_fgas',pred_err_fgas)
-        numpyro.deterministic('pred_err_mzr',pred_err_mzr)    
+        # numpyro.deterministic('pred_err_mzr',pred_err_mzr)    
+        # numpyro.deterministic('pred_err_sfms',pred_err_sfms)    
+        numpyro.deterministic('pred_err_mzr_gas',pred_err_mzr_gas)            
         
         if obs_avg_smhm is None: # for prior and posterior predictive checks
     
             numpyro.sample('obs_smhm',dist.Normal(pred_avg_smhm,tot_err_smhm)) 
             numpyro.sample('obs_fgas',dist.Normal(pred_avg_fgas,tot_err_fgas)) 
             numpyro.sample('obs_mzr',dist.Normal(pred_avg_mzr,tot_err_mzr)) 
+            numpyro.sample('obs_sfms',dist.Normal(pred_avg_sfms,tot_err_sfms)) 
+            numpyro.sample('obs_mzr_gas',dist.Normal(pred_avg_mzr_gas,tot_err_mzr_gas))  
             
         else:
     
@@ -164,6 +185,12 @@ def setup(config,halo_index,obs_stats,batch_solve):
     
             if Lflag_mzr: 
                 obs_mzr = numpyro.sample('obs_mzr',dist.Normal(pred_avg_mzr,tot_err_mzr), obs=obs_avg_mzr)
+
+            if Lflag_sfms: 
+                obs_sfms = numpyro.sample('obs_sfms',dist.Normal(pred_avg_sfms,tot_err_sfms), obs=obs_avg_sfms)
+
+            if Lflag_mzr_gas: 
+                obs_mzr_gas = numpyro.sample('obs_mzr_gas',dist.Normal(pred_avg_mzr_gas,tot_err_mzr_gas), obs=obs_avg_mzr_gas)    
                 
 
     # in case we want to compute loss for adam based on numpyro model
@@ -173,7 +200,9 @@ def setup(config,halo_index,obs_stats,batch_solve):
         logp, _ = numpyro.infer.util.log_density(model, 
                                                  (obs_avg_smhm,obs_err_smhm,
                                                   obs_avg_fgas,obs_err_fgas,
-                                                  obs_avg_mzr,obs_err_mzr), 
+                                                  obs_avg_mzr,obs_err_mzr,
+                                                  obs_avg_sfms,obs_err_sfms,
+                                                  obs_avg_mzr_gas,obs_err_mzr_gas, ), 
                                                  {}, params)
         
         # take negative of numpyro log-posterior so it is a loss for adam
@@ -207,6 +236,7 @@ def setup(config,halo_index,obs_stats,batch_solve):
         # TO DO: for mocks, put back in dependence on mock_num+chain_num for 
         mcmc.warmup(key(chain_num+22), # random int offset just in case.. 
                     obs_avg_smhm,obs_err_smhm,obs_avg_fgas,obs_err_fgas,obs_avg_mzr,obs_err_mzr,
+                    obs_avg_sfms,obs_err_sfms,obs_avg_mzr_gas,obs_err_mzr_gas,
                     collect_warmup=True,
                     extra_fields=('i','z','z_grad','potential_energy','energy','r','num_steps',
                     'adapt_state.step_size','adapt_state.inverse_mass_matrix',))
@@ -254,6 +284,7 @@ def setup(config,halo_index,obs_stats,batch_solve):
         mcmc.post_warmup_state = mcmc.last_state
         mcmc.run(mcmc.post_warmup_state.rng_key,
                 obs_avg_smhm,obs_err_smhm,obs_avg_fgas,obs_err_fgas,obs_avg_mzr,obs_err_mzr,
+                 obs_avg_sfms,obs_err_sfms,obs_avg_mzr_gas,obs_err_mzr_gas,
                 extra_fields=('i','z','z_grad','potential_energy','energy','r','num_steps',
                             'adapt_state.step_size','adapt_state.inverse_mass_matrix',))    
         
@@ -300,6 +331,8 @@ def setup(config,halo_index,obs_stats,batch_solve):
                   Lflag_smhm=Lflag_smhm,
                   Lflag_fgas=Lflag_fgas,
                   Lflag_mzr=Lflag_mzr,
+                  Lflag_sfms=Lflag_sfms,
+                  Lflag_mzr_gas=Lflag_mzr_gas,
                   # save obs_stats in case it was changed for forecasting -- for easier predictive plots
                   obs_x0_smhm=obs_x0_smhm,
                   obs_bw_smhm=obs_bw_smhm,
@@ -312,8 +345,16 @@ def setup(config,halo_index,obs_stats,batch_solve):
                   obs_x0_mzr=obs_x0_mzr,
                   obs_bw_mzr=obs_bw_mzr,
                   obs_avg_mzr=obs_avg_mzr,
-                  obs_err_mzr=obs_err_mzr
-                 )
+                  obs_err_mzr=obs_err_mzr,
+                  obs_x0_sfms=obs_x0_sfms,
+                  obs_bw_sfms=obs_bw_sfms,
+                  obs_avg_sfms=obs_avg_sfms,
+                  obs_err_sfms=obs_err_sfms,
+                  obs_x0_mzr_gas=obs_x0_mzr_gas,
+                  obs_bw_mzr_gas=obs_bw_mzr_gas,
+                  obs_avg_mzr_gas=obs_avg_mzr_gas,
+                  obs_err_mzr_gas=obs_err_mzr_gas,                  
+                  config=config)
         
         print('saved %s'%fname,flush=True)
 

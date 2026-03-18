@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH -J lit100
+#SBATCH -J nutsmanga
 #SBATCH --ntasks-per-node=1
 #SBATCH -N 4
-#SBATCH -t 24:00:00
+#SBATCH -t 120:00:00
 #SBATCH --exclusive
-#SBATCH --constraint="[genoa|icelake|rome]"
-## SBATCH --constraint=genoa
+#SBATCH --constraint="[genoa|icelake]"
+##SBATCH --constraint=icelake
 #SBATCH -p cca
 
 module load disBatch/beta

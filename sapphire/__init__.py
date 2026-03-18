@@ -78,18 +78,13 @@ def run(config):
     integrator, saveat_fn, list_parameterizations = model_loader.get(config,verbose=True)
 
     ### decide how to run: single set of parameters or sampling many params simultaneously
-    ### TO DO: move this parsing / dependency injection to a utility module 
+    # this module will automatically return params based on runtype and inference_config['random_mock'] etc. 
+    # if mock=True, free_params_arr is the "true" mock parameter array (non-transformed, ready to input into loss func, adam, nuts, etc.)    
     from sapphire.utils import setup_parameters 
-
-    if config['runtype'] not in ['single','sampling','inference']:
-        raise ValueError('config.runtype must be one of single, sampling or inference')
-        
-    else:
-        # this module will automatically return params based on runtype and inference_config['random_mock'] etc. 
-        # if mock=True, free_params_arr is the "true" mock parameter array (non-transformed, ready to input into loss func, adam, nuts, etc.)
-        full_params_arr, free_params_arr = setup_parameters.get(config)
+    full_params_arr, free_params_arr = setup_parameters.get(config)
 
     ### now set up the ODE solver to run on single parameter set or batched parameter set 
+    ### TO DO: move this parsing / dependency injection to sapphire/solvers
     if config['solver_config']['engine'] == 'diffrax':
         from sapphire.solvers import diffrax as solver
     else:
@@ -108,15 +103,16 @@ def run(config):
     sol = batch_solve(halo_index,full_params_arr)
     print(sol.ys[0][0][0],flush=True)
     print('full-batch initial jit+sol took %.3f sec'%(timer()-tstart),flush=True)
-    
-    tstart = timer()
-    sol = batch_solve(halo_index,full_params_arr)
-    print(sol.ys[0][0][0],flush=True)
-    print('full-batch jitted sol took %.3f sec'%(timer()-tstart),flush=True)
+
+    if config['post_jit_benchmark'] is True: 
+        tstart = timer()
+        sol = batch_solve(halo_index,full_params_arr)
+        print(sol.ys[0][0][0],flush=True)
+        print('full-batch jitted sol took %.3f sec'%(timer()-tstart),flush=True)
 
     
     """ 
-    add module here to compress+save data directly for TSG/ILI 
+    add module here to optionally compress+save data directly for TSG/ILI when in 'sampling' mode
     """
     
     # NOTE: also add option to return extracted quantities and summary statistics
@@ -124,7 +120,7 @@ def run(config):
         print('returning sol...',flush=True)
         
         # prepare generic out_sapphire tuple to be returned at end below
-        out_sapphire = (sol, )
+        out_sapphire = (sol, free_params_arr, )
     
     ### alternatively run inference if requested
     ######### Can this whole thing be put into a sapphire.inference wrapper module to keep driver / __ clean?
@@ -174,13 +170,15 @@ def run(config):
             
             # by default nan's if not running in mock mode 
             true_loss, true_grad_loss = jnp.nan, jnp.full(len(free_params_arr),jnp.nan)
-    
+
+            ### if mock mode, print true loss, grad, etc. to verify things work at true minimum, and for benchmarking
             # TO DO: can this block be combined with the other fit_mock==True block above?
             if inference_config['fit_mock'] is True:
+                
                 tstart = timer()
                 true_loss = loss_func(true_params)
                 tjit_loss = timer()-tstart
-                
+
                 tstart = timer()
                 true_loss = loss_func(true_params)
                 tloss = timer()-tstart
@@ -190,7 +188,7 @@ def run(config):
                 tstart = timer()
                 true_grad_loss = grad_loss_func(true_params)
                 tjit_grad = timer()-tstart
-    
+
                 tstart = timer()
                 true_grad_loss = grad_loss_func(true_params)
                 tgrad = timer()-tstart            
@@ -200,7 +198,7 @@ def run(config):
                 tstart = timer()
                 true_hess_loss = hess_loss_func(true_params)
                 tjit_hess = timer()-tstart
-    
+
                 tstart = timer()
                 true_hess_loss = hess_loss_func(true_params)
                 thess = timer()-tstart            
@@ -252,8 +250,6 @@ def run(config):
 
             # TO DO: fix general out for interactive analysis
             out_sapphire = out_numpyro
-            
-
         
         else:
             raise ValueError('inference_config.engine must be either adam or hmc',flush=True)

@@ -32,16 +32,16 @@ from jax.sharding import Mesh, PartitionSpec, NamedSharding
 def extract_quantities(sol):
     ### sol is the diffrax solution object from batch_solve above
 
-    # first compute relevant quantities
-    z0_Mvir = jnp.log10(sol.ys[1]['Mvir'][:,-1])
-    z0_Mstar = sol.ys[0][:,-1,0]
-    z0_smhm = jnp.log10(10**z0_Mstar / 10**z0_Mvir)
-            
-    # ### extract quantities of interest
+    ### first basic solver stats of interest
     nsteps = sol.stats['num_steps']
     fail_flag = jnp.where(nsteps>=4096,1,0)
     Nfail = jnp.sum(fail_flag) # where True (failed solve), yield 1, else 0. Then we can just sum
     # print('true mock Nfail=%s'%Nfail)
+    
+    # first compute relevant quantities
+    z0_Mvir = jnp.log10(sol.ys[1]['Mvir'][:,-1])
+    z0_Mstar = sol.ys[0][:,-1,0]
+    z0_smhm = jnp.log10(10**z0_Mstar / 10**z0_Mvir)
     
     # April 28 -- need to do this for kde, otherwise inf/nan Mvir or smhm leads to all-nan kde
     z0_smhm = jnp.where(fail_flag, -99.0, z0_smhm) 
@@ -59,7 +59,18 @@ def extract_quantities(sol):
     z0_mzr = jnp.log10(10**z0_MZstar / 10**z0_Mstar / 0.02)    
     z0_mzr = jnp.where(fail_flag, -99.0, z0_mzr)       
 
-    return z0_Mvir, z0_smhm, fail_flag, Nfail, z0_Mstar, z0_fgas, z0_mzr
+    ### Feb 27 -- add SFMS and gas-phase MZR
+    
+    z0_Mdot_sfr = sol.ys[1]['Mdot_sfr'][:,-1] 
+    z0_Mdot_sfr = jnp.where(fail_flag, -99.0, z0_Mdot_sfr)     
+    
+    z0_MZgas = sol.ys[0][:,-1,5]
+    z0_mzr_gas = jnp.log10(10**z0_MZgas / 10**z0_Mism / 0.02)    
+    z0_mzr_gas = jnp.where(fail_flag, -99.0, z0_mzr_gas)       
+
+
+
+    return z0_Mvir, z0_smhm, fail_flag, Nfail, z0_Mstar, z0_fgas, z0_mzr, z0_Mdot_sfr, z0_mzr_gas
 
 
 ### New function that pre-processes stuff we need as inputs for nadaraya_watson regression function
@@ -176,7 +187,8 @@ def summarize_mock(sol,obs_stats=None):
     """
 
     # extract what we need
-    mock_z0_Mvir, mock_z0_smhm, mock_fail_flag, mock_Nfail, mock_z0_Mstar, mock_z0_fgas, mock_z0_mzr = extract_quantities(sol)
+    (mock_z0_Mvir, mock_z0_smhm, mock_fail_flag, mock_Nfail, mock_z0_Mstar, 
+     mock_z0_fgas, mock_z0_mzr, mock_z0_Mdot_sfr, mock_z0_mzr_gas) = extract_quantities(sol)
     
     # compute bandwidths and centers for gaussian kernels for mvir and mstar 
     # Jan 16 -- x0 and bw can be defined by input obs_stats [for prior predictive checks]
@@ -185,23 +197,98 @@ def summarize_mock(sol,obs_stats=None):
         mock_bw_smhm, mock_x0_smhm = get_bandwidths(mock_fail_flag, mock_z0_Mvir)
         mock_bw_fgas, mock_x0_fgas = get_bandwidths(mock_fail_flag, mock_z0_Mstar) 
         mock_bw_mzr, mock_x0_mzr = get_bandwidths(mock_fail_flag, mock_z0_Mstar) 
+        mock_bw_sfms, mock_x0_sfms = get_bandwidths(mock_fail_flag, mock_z0_Mstar) 
+        mock_bw_mzr_gas, mock_x0_mzr_gas = get_bandwidths(mock_fail_flag, mock_z0_Mstar) 
     else: # based on return signature in sapphire.utils.read_obs
         mock_bw_smhm, mock_x0_smhm = obs_stats[1], obs_stats[0]
         mock_bw_fgas, mock_x0_fgas = obs_stats[5], obs_stats[4]
         mock_bw_mzr, mock_x0_mzr = obs_stats[9], obs_stats[8]
+        mock_bw_sfms, mock_x0_sfms = obs_stats[13], obs_stats[12]
+        mock_bw_mzr_gas, mock_x0_mzr_gas = obs_stats[17], obs_stats[16]
         
     # do gaussian kernel regression 
     mock_avg_smhm, mock_err_smhm = nadaraya_watson(mock_z0_Mvir, mock_z0_smhm, mock_x0_smhm, mock_bw_smhm)
     mock_avg_fgas, mock_err_fgas = nadaraya_watson(mock_z0_Mstar, mock_z0_fgas, mock_x0_fgas, mock_bw_fgas)
     mock_avg_mzr, mock_err_mzr = nadaraya_watson(mock_z0_Mstar, mock_z0_mzr, mock_x0_mzr, mock_bw_mzr)    
+    mock_avg_sfms, mock_err_sfms = nadaraya_watson(mock_z0_Mstar, mock_z0_Mdot_sfr, mock_x0_sfms, mock_bw_sfms)    
+    mock_avg_mzr_gas, mock_err_mzr_gas = nadaraya_watson(mock_z0_Mstar, mock_z0_mzr_gas, mock_x0_mzr_gas, mock_bw_mzr_gas)    
 
     # NOTE: the return order should be same as expected by sapphire.inference modules (for the "obs_stats" collection)
     # Dec 15 -- in the most general case, each obs may have different x0 and bw, so for now here just repeat
     return (mock_x0_smhm, mock_bw_smhm, mock_avg_smhm, mock_err_smhm,
             mock_x0_fgas, mock_bw_fgas, mock_avg_fgas, mock_err_fgas,
-            mock_x0_mzr, mock_bw_mzr, mock_avg_mzr, mock_err_mzr)
+            mock_x0_mzr, mock_bw_mzr, mock_avg_mzr, mock_err_mzr,
+            mock_x0_sfms, mock_bw_sfms, mock_avg_sfms, mock_err_sfms,
+            mock_x0_mzr_gas, mock_bw_mzr_gas, mock_avg_mzr_gas, mock_err_mzr_gas)
 
 
+def extract_posterior_quantities(sol,zindex=-1):
+    ### this is a generalized version of extract_quantities() above to operate over multiple realizations 
+    ### TO DO: generalize further to specify arbitrary set of quantities to extract 
+    ### TO DO: this and extract_quantities() should probably be moved to a separate module since it's not unique to gkr
+    ### TO DO: generalize to work with any arbitrary "output_redshifts" input by user
+    ### -----> currently zindex=-1 is default for z=0,  and zindex=0 is z=2 (if output_redshifts=[0.0,2.0] as for Pandya+26)
+
+    ### first basic solver stats of interest 
+    nsteps = sol.stats['num_steps'] 
+    fail_flag = jnp.where(nsteps>=4096,1,0) 
+    Nfail = jnp.sum(fail_flag) # where True (failed solve), yield 1, else 0. Then we can just sum 
+
+    # first compute relevant quantities
+    Mvir = jnp.log10(sol.ys[1]['Mvir'][:,:,zindex])
+    Mstar = sol.ys[0][:,:,zindex,0]
+    smhm = jnp.log10(10**Mstar / 10**Mvir)
+            
+    # April 28 -- need to do this for kde, otherwise inf/nan Mvir or smhm leads to all-nan kde
+    smhm = jnp.where(fail_flag, -99.0, smhm) 
+    Mvir = jnp.where(fail_flag, -99.0, Mvir) 
+
+    ### July 14 -- add stuff for fgas and MZR
+
+    Mstar = jnp.where(fail_flag, -99.0, Mstar) 
     
+    Mism = sol.ys[0][:,:,zindex,1]
+    fgas = jnp.log10(10**Mism / 10**Mstar)
+    fgas = jnp.where(fail_flag, -99.0, fgas) 
+    
+    MZstar = sol.ys[0][:,:,zindex,4]
+    mzr = jnp.log10(10**MZstar / 10**Mstar / 0.02)    
+    mzr = jnp.where(fail_flag, -99.0, mzr)       
+
+    ### Feb 24 -- more z=0 quantities 
+    Mdot_sfr = sol.ys[1]['Mdot_sfr'][:,:,zindex] 
+    Mdot_sfr = jnp.where(fail_flag, -99.0, Mdot_sfr) 
+
+    Mdot_wind = sol.ys[1]['Mdot_wind'][:,:,zindex] 
+    Mdot_wind = jnp.where(fail_flag, -99.0, Mdot_wind)     
+
+    n0 = sol.ys[1]['n0'][:,:,zindex] 
+    n0 = jnp.where(fail_flag, -99.0, n0)     
+
+    T0 = sol.ys[1]['T0'][:,:,zindex] 
+    T0 = jnp.where(fail_flag, -99.0, T0)
+
+    Mdot_in_halo = sol.ys[1]['Mdot_in_halo'][:,:,zindex] 
+    Mdot_in_halo = jnp.where(fail_flag, -99.0, Mdot_in_halo) 
+
+    Mdot_in_dm = sol.ys[1]['Mdot_in_dm'][:,:,zindex] 
+    Mdot_in_dm = jnp.where(fail_flag, -99.0, Mdot_in_dm) 
+
+    Mdot_cool = sol.ys[1]['Mdot_cool'][:,:,zindex] 
+    Mdot_cool = jnp.where(fail_flag, -99.0, Mdot_cool)   
+
+    MZgas = sol.ys[0][:,:,zindex,5] 
+    mzr_gas = jnp.log10(10**MZgas / 10**Mism / 0.02)    
+    mzr_gas = jnp.where(fail_flag, -99.0, mzr_gas) 
+
+    ### March 5 -- output halo baryon fraction
+    Mcgm = sol.ys[0][:,:,zindex,2]
+    halo_fb = jnp.log10((10**Mcgm+10**Mism+10**Mstar) / (10**Mvir+10**Mcgm+10**Mism+10**Mstar))
+    halo_fb = jnp.where(fail_flag, -99.0, halo_fb)     
+ 
+    return (Mvir, smhm, fail_flag, Nfail, Mstar, fgas, mzr,
+            Mdot_sfr,Mdot_wind,n0,T0,Mdot_in_halo,Mdot_in_dm,Mdot_cool,mzr_gas,halo_fb)
+    
+   
 
 #

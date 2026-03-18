@@ -26,13 +26,16 @@ from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec, NamedSharding
 
+import pandas as pd
+import os
+
 # user requested only a single run, so just transform their input dict into jnp.array format with 10**A_X, etc. 
 def single_fixed(config):
 
     # first get just the free parameters non-transformed (as would be input into adam, NUTS, etc.)
-    params_bounds = config['sampling_config']['params_bounds']
+    params_bounds = config['sampling_config']['params_bounds'] 
     params_free = list(params_bounds.keys())    
-    params_fixed_astro = config['params_fixed_astro']
+    params_fixed_astro = config['params_fixed_astro'] 
     
     free_params_arr = jnp.array([params_fixed_astro[k] for k in params_free])
 
@@ -172,10 +175,77 @@ def latin_hypercube_sampling(config):
     return full_params_arr, free_params_arr
 
 
+### Feb 24 -- this returns N random samples from a posterior file, following the routines in visualization/numpyro_plots
+def posterior_samples(config):
+    ### posterior_file should be in sampling_config when using 'method' = 'posterior'
+    ### posterior_file should have %s in for chain num, e.g., 'numpyro_manga_chain%s_111.npz'
+
+    sampling_config = config['sampling_config']
+    
+    ### TO DO: automate this and/or have it become an input
+    params_free = ["A_M","alpha0_M","A_E","alpha0_E","A_SF","alpha0_SF","A_Z","alpha0_Z"]
+    
+    # samples dataframes indexed by int for chain_num
+    chains_nuts = {} 
+    
+    for cnum in range(0,4):
+    
+        fname = os.path.join(config['output_path'],'outputs',sampling_config['posterior_file']%cnum)
+        npz_nuts = jnp.load(fname,allow_pickle=True)
+    
+        samples_dict = {k: npz_nuts['samples'].item()[k] for k in params_free}
+        samples_df = pd.DataFrame(samples_dict)
+        chains_nuts[cnum] = samples_df
+    
+    samples_df = pd.concat(chains_nuts.values(), ignore_index=True)
+    
+    # get Nsamples random draws from posterior 
+    # must be integer multuple of num_cpus or num_gpus 
+    Nsamples = sampling_config['Nsamples'] 
+    rand_samples_df = samples_df.sample(Nsamples,random_state=1) 
+    rand_samples_dict = rand_samples_df.to_dict(orient='list') 
+    
+    # convert input params_fixed so every element is a jax array for later below 
+    params_fixed = {k: jnp.array(v,dtype='float64') for k, v in config['params_fixed_astro'].items()} 
+    
+    # now merge fixed and free params to create Nguess params dicts 
+    # note: for duplicated keys between params_fixed and params_lhs, the value of params_lhs will be used 
+    params_merged = [{**params_fixed, **{k: float(rand_samples_dict[k][i]) for k in params_free}} for i in range(Nsamples)]        
+
+    # first define order of parameters expected by sapphire
+    params_order = ['A_M','alpha0_M','alphaz_M','beta_M',
+                    'A_E','alpha0_E','alphaz_E','beta_E',
+                    'A_SF','alpha0_SF','alphaz_SF','beta_SF',
+                    'A_Z','alpha0_Z','alphaz_Z','beta_Z'] 
+    
+    # now convert those Nguess params dicts into 2D jax array of parameters 
+    full_params_arr = jnp.array([[params_merged[i][k] for k in params_order] for i in range(Nsamples)])
+    
+    # as usual hstack the final column of all zeros for realization # placeholder
+    full_params_arr = jnp.concatenate([full_params_arr, jnp.zeros((full_params_arr.shape[0],1))],axis=1)
+    
+    # finally change the A_X to 10**A_X since that's what solve_halo expects 
+    full_params_arr = full_params_arr.at[:,0].set(10**full_params_arr[:,0]) # A_M 
+    full_params_arr = full_params_arr.at[:,4].set(10**full_params_arr[:,4]) # A_E 
+    full_params_arr = full_params_arr.at[:,8].set(10**full_params_arr[:,8]) # A_SF 
+    full_params_arr = full_params_arr.at[:,12].set(10**full_params_arr[:,12]) # A_Z 
+    
+    # print('params_lharr\n',params_lharr,flush=True)
+    print('full_params_arr.shape\n',full_params_arr.shape,flush=True)
+    
+    ### convert params_lhs to arr for other processing 
+    free_params_arr = arr = jnp.column_stack([jnp.asarray(rand_samples_dict[k]) for k in params_free])
+    
+    # (full_params array, free non-transformed params arr)
+    return full_params_arr, free_params_arr
+
 
 
 def get(config):
 
+    if config['runtype'] not in ['single','sampling','inference']:
+        raise ValueError('config.runtype must be one of single, sampling, inference')
+    
     sampling_config = config['sampling_config']
     inference_config = config['inference_config'] 
 
@@ -186,12 +256,14 @@ def get(config):
     elif config['runtype'] == 'inference' and inference_config['random_mock']==True:
         return single_random(config)
     
-    elif config['runtype'] == 'sampling': 
-        # can implement alternative samplers later
+    elif config['runtype'] == 'sampling' and sampling_config['method'] == 'latin_hypercube': 
         return latin_hypercube_sampling(config)
 
+    elif config['runtype'] == 'sampling' and sampling_config['method'] == 'posterior':
+        return posterior_samples(config)
+
     else:
-        raise NotImplementedError('that sampling strategy is not implemented, check sapphire/utils/sample_parameters.py')
+        raise NotImplementedError('that sampling strategy is not implemented, check sapphire/utils/setup_parameters.py')
 
 
 

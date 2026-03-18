@@ -47,21 +47,28 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
     ### set up global final integration time in log(t/sec) corresponding to z=0
     logt_final = jnp.log10(Planck15.age(0.0).value * 1e9 * yr_to_s)
     
-    # set up output times at which to return solution -- let's say we want ~1000 points between t_init and t_final
-    # t_eval = jnp.linspace(logt_init,logt_final,100)
-    ### let's say we just want a few redshifts
-    t_eval = jnp.log10(yr_to_s*1e9*jnp.asarray(Planck15.age(jnp.arange(0.0,3.5,0.5)).value)[::-1])
-    
-    # set up inputs for diffrax ODE solver
+    ### set up inputs for diffrax ODE solver
     
     terms = ODETerm(integrator)
     t1 = logt_final 
-    dt0 = 1e-10 # April 2024 -- this must be None otherwise Tsit5() cannot find dt0 even if max_steps=16**6 (it solves in only ~500 steps vs 10K for Bosh3)
-    solver = Tsit5() #Dopri5() #Tsit5() #Bosh3() #Tsit5() #Dopri5()
+    dt0 = 1e-10 # April 2024 -- this cannot be None otherwise Tsit5() cannot find dt0 even if max_steps=16**6 (it solves in only ~500 steps vs 10K for Bosh3)
+    solver = Tsit5(scan_kind='bounded') #Dopri5() #Tsit5() #Bosh3() 
     max_steps = 16**4 # if this is None, reverse-mode checkpointed adjoint (autodiff) cannot be done; typically we only need ~3K steps for our tolerance choice
-    tsave = SaveAt(ts=t_eval,dense=True) # save solution on our finely spaced grid with dense interpolation
     
-
+    ### set up output times at which to return solution
+    
+    if config['output_redshifts'] in [0.0, [0], [0.0]]: 
+        # TO DO: generalize this in case logt_final != 0.0 and user wants to run only to some other final redshift and output that
+        saveat = SaveAt(t1=True,fn=saveat_fn) 
+    else: 
+        # t_eval = jnp.log10(yr_to_s*1e9*jnp.asarray(Planck15.age(jnp.arange(0.0,3.5,0.5)).value)[::-1])
+        # assume user input redshift array in monotonically increasing order, but ages then become decreasing, need [::-1] to reverse for diffrax
+        t_eval = jnp.log10(yr_to_s*1e9*jnp.asarray(Planck15.age(jnp.asarray(config['output_redshifts'])).value)[::-1]) 
+        saveat = SaveAt(ts=t_eval,fn=saveat_fn)
+        
+        # t_eval = jnp.linspace(logt_init,logt_final,100)
+        # tsave = SaveAt(ts=t_eval,dense=True) # save solution on our finely spaced grid with dense interpolation
+    
     # first need to trim # halos so it = integer # of devices
     Ndevices = jax.local_device_count()
     print('Ndevices for jax batching', Ndevices)
@@ -117,13 +124,14 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
         # set adjoint=DirectAdjoint() if forward mode autodiff desired
         """ May 12 -- try atol=rtol=1e-5 """ 
         """ July 14 -- fix to atol=rtol=1e-5, max_steps=16**4, t1=True """
-        sol_diffrax = diffeqsolve(terms,Tsit5(scan_kind='bounded'),
+        sol_diffrax = diffeqsolve(terms,solver,
                                   logt_init,logt_final,dt0,initial_conditions,(batch_params,interps),throw=False,adjoint=DirectAdjoint(),
                                   stepsize_controller=PIDController(rtol=config['solver_config']['rtol'],
                                                                     atol=config['solver_config']['atol']),
                                   max_steps=max_steps,
                                   # saveat=SaveAt(ts=t_eval,fn=saveat_fn))
-                                  saveat=SaveAt(t1=True,fn=saveat_fn))
+                                  # saveat=SaveAt(t1=True,fn=saveat_fn))
+                                  saveat=saveat)
         
         return sol_diffrax
     

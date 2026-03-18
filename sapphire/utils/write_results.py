@@ -74,11 +74,14 @@ def write_adam_map_fisher(config,out_map_fisher,full_params_arr,free_params_arr,
     ### unpack obs_stats (from mock or observations)
     (obs_x0_smhm,obs_bw_smhm,obs_avg_smhm,obs_err_smhm,
      obs_x0_fgas,obs_bw_fgas,obs_avg_fgas,obs_err_fgas,
-     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr) = obs_stats   
+     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr, 
+     obs_x0_sfms,obs_bw_sfms,obs_avg_sfms,obs_err_sfms, 
+     obs_x0_mzr_gas,obs_bw_mzr_gas,obs_avg_mzr_gas,obs_err_mzr_gas) = obs_stats 
     
     ### unpack posterior predictives at theta_map 
     (map_z0_Mvir, map_z0_smhm, map_Nfail, map_z0_Mstar, map_z0_fgas, map_z0_mzr,
-     map_avg_smhm, map_err_smhm, map_avg_fgas, map_err_fgas, map_avg_mzr, map_err_mzr) = post_preds_map
+     map_avg_smhm, map_err_smhm, map_avg_fgas, map_err_fgas, map_avg_mzr, map_err_mzr,
+     map_avg_sfms, map_err_sfms, map_avg_mzr_gas, map_err_mzr_gas) = post_preds_map
     
     # set up npz filename depending if its obs or not
     ### TO DO: check that this is all valid upfront in read_config (to not waste time with a crash at end)
@@ -86,7 +89,7 @@ def write_adam_map_fisher(config,out_map_fisher,full_params_arr,free_params_arr,
     if 'mock_num' in config.keys() and config['inference_config']['fit_mock']==True:
         prefix = 'mock%s'%config['mock_num']
     elif config['inference_config']['fit_obs'] == True:
-        prefix = config['obs_name']
+        prefix = 'adam_%s'%config['obs_name']
     else:
         prefix = ''
 
@@ -135,6 +138,14 @@ def write_adam_map_fisher(config,out_map_fisher,full_params_arr,free_params_arr,
               obs_bw_mzr = obs_bw_mzr,              
               obs_avg_mzr = obs_avg_mzr,
               obs_err_mzr = obs_err_mzr,
+              obs_x0_sfms = obs_x0_sfms,
+              obs_bw_sfms = obs_bw_sfms,              
+              obs_avg_sfms = obs_avg_sfms,
+              obs_err_sfms = obs_err_sfms,              
+              obs_x0_mzr_gas = obs_x0_mzr_gas,
+              obs_bw_mzr_gas = obs_bw_mzr_gas,              
+              obs_avg_mzr_gas = obs_avg_mzr_gas,
+              obs_err_mzr_gas = obs_err_mzr_gas,
               
               map_z0_Mvir = map_z0_Mvir, 
               map_z0_smhm = map_z0_smhm, 
@@ -147,9 +158,13 @@ def write_adam_map_fisher(config,out_map_fisher,full_params_arr,free_params_arr,
               map_avg_fgas = map_avg_fgas,  
               map_err_fgas = map_err_fgas, 
               map_avg_mzr = map_avg_mzr, 
-              map_err_mzr = map_err_mzr, 
+              map_err_mzr = map_err_mzr,               
+              map_avg_sfms = map_avg_sfms, 
+              map_err_sfms = map_err_sfms,               
+              map_avg_mzr_gas = map_avg_mzr_gas, 
+              map_err_mzr_gas = map_err_mzr_gas, 
 
-              
+              config=config
              )
               
     print('saved adam-map-fisher outputs in %s'%fname,flush=True)

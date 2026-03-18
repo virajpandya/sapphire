@@ -52,7 +52,7 @@ import numpy as np # for np.ravel(axes), can probably be done away with
 import pandas as pd
 
 
-def trace(output_path,basestr,savefig=False):
+def trace(output_path,basestr,figname=False):
     ### output_path is the base sapphire output directory from config.yaml
     ### basestr should have %s in for chain num, e.g., '/path/sapphire_outputs/outputs/numpyro_manga_chain%s_111.npz'
 
@@ -62,10 +62,10 @@ def trace(output_path,basestr,savefig=False):
                  'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
                  'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
                  'A_Z':r'$A_Z$','alpha0_Z':r'$\alpha_Z^0$'}
-    parlims = {'A_M':(-2.1,1.1),'alpha0_M':(-2.1,0.1),
-               'A_E':(-2.1,0.1),'alpha0_E':(-2.1,0.1),
-               'A_SF':(-0.1,1.2),'alpha0_SF':(-2.1,0.1),
-               'A_Z':(-2.1,0.1),'alpha0_Z':(-2.1,0.1)}
+    parlims = {'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
+               'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
+               'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
+               'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1)}
     
 
     # samples dataframes indexed by int for chain_num for Gelman-Rubin statistic 
@@ -123,12 +123,9 @@ def trace(output_path,basestr,savefig=False):
 
     fig.suptitle(basestr.replace('_chain%s','').replace('.npz',''),fontsize=16)#,y=1.01)
 
-    if savefig is True:
-        outfile = os.path.join(output_path,'figures',
-                               # since this is run dependent, for now just prepend "trace" to original filename 
-                               # e.g., numpyro_manga_chain%s_111.npz becomes trace_numpyro_manga_111.png
-                               # TO DO: how to improve/generalize this?
-                              'trace_'+(basestr.replace('_chain%s','').replace('.npz','.png')))
+    ### if requested, save figure
+    if figname not in [None, False]:
+        outfile = os.path.join(output_path,'figures',figname)
         plt.savefig(outfile,bbox_inches='tight',dpi=300,facecolor='w')
         print('saved %s'%outfile,flush=True)
 
@@ -224,7 +221,7 @@ def plot_parameterizations(par_axes,config,samples_df,params_free,color_nuts,Nra
 ### function that combines all chains and makes cornerplot, using ChainConsumer
 # TO DO: generalize for any # of chains, and allow plotting individual chains w/o combining for another convergence check
 # TO DO: add optional Fisher MAP and covariance location (e.g., from adam)
-def corner(output_path,basestr,config,savefig=False,title=False,Nrand=100):
+def corner(output_path,basestr,config,figname=None,title=False,Nrand=100):
     
     params_free = ["A_M","alpha0_M","A_E","alpha0_E","A_SF","alpha0_SF","A_Z","alpha0_Z"]
     chain_colors = ['#3b82f6','#10b981','#ef4444','#a855f7'] # blue, emerald, red, purple from chainconsumer default color_finder
@@ -259,10 +256,10 @@ def corner(output_path,basestr,config,savefig=False,title=False,Nrand=100):
     consumer.add_chain(Chain(samples=samples_df, name="NUTS chain 3",color=color_nuts,shade_alpha=0.3))
 
     # TO DO: generalize with user inputting these
-    consumer.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-2.1,0.1),
-                                                 'A_E':(-2.1,0.1),'alpha0_E':(-2.1,0.1),
-                                                 'A_SF':(-0.1,1.2),'alpha0_SF':(-2.1,0.1),
-                                                 'A_Z':(-2.1,0.1),'alpha0_Z':(-2.1,0.1),},
+    consumer.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
+                                                 'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
+                                                 'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
+                                                 'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1),},
                                         labels={'A_M':r'$A_M$','alpha0_M':r'$\alpha_M^0$',
                                                 'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
                                                 'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
@@ -301,18 +298,15 @@ def corner(output_path,basestr,config,savefig=False,title=False,Nrand=100):
     axes[0,0].text(1.6,0.6,'NUTS (HMC)',fontsize=42,color=color_nuts,transform=axes[0,0].transAxes,weight='heavy')
     # axes[0,0].text(1.6,0.25,'MAP (Fisher)',fontsize=42,color=color_adam,transform=axes[0,0].transAxes,weight='heavy')
     
-    if savefig is True:
-        outfile = os.path.join(output_path,'figures',
-                               # since this is run dependent, for now just prepend "corner" to original filename 
-                               # e.g., numpyro_manga_chain%s_111.npz becomes corner_numpyro_manga_111.png
-                               # TO DO: how to improve/generalize this?
-                              'corner_'+(basestr.replace('_chain%s','').replace('.npz','.png')))
+    ### if requested, save figure
+    if figname not in [None, False]:
+        outfile = os.path.join(output_path,'figures',figname)
         plt.savefig(outfile,bbox_inches='tight',dpi=300,facecolor='w')
         print('saved %s'%outfile,flush=True)
 
 
 ### TO DO: merge this with corner() by adding more arguments 
-def multicorner(output_path,basestr,config,savefig=False,title=False,Nrand=100):
+def multicorner(output_path,basestr,config,figname=None,title=False,Nrand=100):
     ### basestr should have %s for chain num AND %s for flag (111,110,etc.), e.g., 'numpyro_manga_chain%s_%s.npz'
     
     params_free = ["A_M","alpha0_M","A_E","alpha0_E","A_SF","alpha0_SF","A_Z","alpha0_Z"]
@@ -348,13 +342,13 @@ def multicorner(output_path,basestr,config,savefig=False,title=False,Nrand=100):
         samples_df = pd.concat(chains_nuts.values(), ignore_index=True)    
         flag_samples[flag] = samples_df # for plotting parametrizations below
     
-        consumer.add_chain(Chain(samples=samples_df, name=flag_label,color=flag_color,shade_alpha=0.3))
+        consumer.add_chain(Chain(samples=samples_df, name=flag_label,color=flag_color,shade_alpha=0.2))
 
     # TO DO: generalize with user inputting these
-    consumer.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-2.1,0.1),
-                                                 'A_E':(-2.1,0.1),'alpha0_E':(-2.1,0.1),
-                                                 'A_SF':(-0.1,1.2),'alpha0_SF':(-2.1,0.1),
-                                                 'A_Z':(-2.1,0.1),'alpha0_Z':(-2.1,0.1),},
+    consumer.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
+                                                 'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
+                                                 'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
+                                                 'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1),},
                                         labels={'A_M':r'$A_M$','alpha0_M':r'$\alpha_M^0$',
                                                 'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
                                                 'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
@@ -398,12 +392,9 @@ def multicorner(output_path,basestr,config,savefig=False,title=False,Nrand=100):
     # axes[0,0].text(1.6,0.6,'NUTS (HMC)',fontsize=42,color=color_nuts,transform=axes[0,0].transAxes,weight='heavy')
     # axes[0,0].text(1.6,0.25,'MAP (Fisher)',fontsize=42,color=color_adam,transform=axes[0,0].transAxes,weight='heavy')
     
-    if savefig is True:
-        outfile = os.path.join(output_path,'figures',
-                               # since this is run dependent, for now just prepend "corner" to original filename 
-                               # e.g., numpyro_manga_chain%s_111.npz becomes corner_numpyro_manga_111.png
-                               # TO DO: how to improve/generalize this?
-                              'multicorner_'+(basestr.replace('_chain%s','').replace('_%s','').replace('.npz','.png')))
+    ### if requested, save figure
+    if figname not in [None, False]:
+        outfile = os.path.join(output_path,'figures',figname)
         plt.savefig(outfile,bbox_inches='tight',dpi=300,facecolor='w')
         print('saved %s'%outfile,flush=True)
 
@@ -412,7 +403,7 @@ def multicorner(output_path,basestr,config,savefig=False,title=False,Nrand=100):
 
 ### function that overplots marginal posteriors from multi-constraint runs 
 # TO DO: generalize this for any number of free parameters, multi-constraint runtypes, number of chains, etc.
-def marginals(output_path,basestr,savefig=False):
+def marginals(output_path,runs,figname=None,leg_axnum=0,leg_loc='best',leg_ncol=1):
     ### output_path is the base sapphire output directory from config.yaml
     ### basestr should have %s for chain num AND %s for flag (111,110,etc.), e.g., 'numpyro_manga_chain%s_%s.npz'
 
@@ -422,28 +413,18 @@ def marginals(output_path,basestr,savefig=False):
                  'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
                  'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
                  'A_Z':r'$A_Z$','alpha0_Z':r'$\alpha_Z^0$'}
-    parlims = {'A_M':(-2.1,1.1),'alpha0_M':(-2.1,0.1),
-               'A_E':(-2.1,0.1),'alpha0_E':(-2.1,0.1),
-               'A_SF':(-0.1,1.2),'alpha0_SF':(-2.1,0.1),
-               'A_Z':(-2.1,0.1),'alpha0_Z':(-2.1,0.1)}
-
-    # par_labels = [r'$A_M$',r'$\alpha_M^0$',r'$A_E$',r'$\alpha_E^0$',r'$A_{\rm SF}$',r'$\alpha_{\rm SF}^0$',r'$A_Z$',r'$\alpha_Z^0$']
+    parlims = {'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
+               'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
+               'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
+               'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1)}
 
     # initialize 2-row figure for the 8 parameters [TO DO: GENERALIZE THIS]
     fig, axes = plt.subplots(nrows=2,ncols=4,figsize=(13,5),constrained_layout=True)
     allax = np.ravel(axes)
-    
-    flag_colors = {'100':'teal','110':'indigo','111':'orange'}
-    # flag_labels = {'100':r'SMHM','110':r'SMHM+f$_{\rm gas}$','111':r'SMHM+f$_{\rm gas}$+MZR'}
-    flag_labels = {'100':r'SMHM','110':r'SMHM+f$_{\rm gas}$','111':r'SMHM+f$_{\rm gas}$+MZR'}
-    
-    ### loop over each realization flag 
 
-    for flag in ['100','110','111']:
-
-        flag_color = flag_colors[flag]
-        flag_label = flag_labels[flag]
-
+    ### loop over each dict in runs and load+plot its marginal posterior
+    for run in runs:
+        
         ### loop over and store posterior samples from all 4 chains    
         # samples dataframes indexed by int for chain_num for Gelman-Rubin statistic 
         chain_samples = {}
@@ -452,7 +433,7 @@ def marginals(output_path,basestr,savefig=False):
         for cnum in range(0,4):
 
             # TO DO: generalize this beyond numpyro_manga_chain%s_%s.npz
-            fname = os.path.join(output_path,'outputs',basestr%(cnum,flag))
+            fname = os.path.join(output_path,'outputs',run['filename']%(cnum))
             npz_nuts = jnp.load(fname,allow_pickle=True)
         
             samples_dict = {k: npz_nuts['samples'].item()[k] for k in params_free}
@@ -465,131 +446,156 @@ def marginals(output_path,basestr,savefig=False):
         # plot this realization's posterior for each parameter in its respective subplot
         for i,k in enumerate(parlabels.keys()):
 
-            sns.kdeplot(samples_df[k].values,color=flag_color,ax=allax[i],lw=3,alpha=0.7,label=flag_label)
+            sns.kdeplot(samples_df[k].values,color=run['color'],ax=allax[i],lw=3,alpha=0.7,label=run['obs_label'])
             allax[i].set_xlim(parlims[k])
             allax[i].set_xlabel(parlabels[k],fontsize=16)
             allax[i].set_ylabel('Posterior',fontsize=14)
 
-    leg = allax[2].legend(fancybox=True)
+    leg = allax[leg_axnum].legend(fancybox=True,loc=leg_loc,ncol=leg_ncol,fontsize=9)
     
     
-    if savefig is True:
-        outfile = os.path.join(output_path,'figures',
-                               # since this is run dependent, for now just prepend "trace" to original filename 
-                               # e.g., numpyro_manga_chain%s_111.npz becomes trace_numpyro_manga_111.png
-                               # TO DO: how to improve/generalize this?
-                              'marginals_'+(basestr.replace('_chain%s','').replace('_%s','').replace('.npz','.png')))
+    ### if requested, save figure
+    if figname not in [None, False]:
+        outfile = os.path.join(output_path,'figures',figname)
         plt.savefig(outfile,bbox_inches='tight',dpi=300,facecolor='w')
         print('saved %s'%outfile,flush=True)
+
 
 
 ### function that overplots random realizations 
 ### TO DO: generalize this, and maybe move to another module (which calls sapphire and extracts arbitrary params/outputs)
-def posterior_predictive_checks(output_path,basestr,obs_stats=None,savefig=False):
-    ### output_path is the base sapphire output directory from config.yaml
-    ### basestr should have %s for chain num AND %s for flag (111,110,etc.), e.g., 'numpyro_manga_chain%s_%s.npz'
-    ### obs_stats -- either passed or (if None) extracted from numpyro output npz file
-    ######### TO DO: make obs_stats a dict
+def posterior_predictive_checks(output_path,runs,
+                                panels=('smhm','fgas','mzr'),obs_varied_panels=None,
+                                obs_labels={'smhm':'Behroozi+19','fgas':'MaNGA','mzr':'MaNGA','mzr_gas':'MaNGA'},
+                                figname=None,leg_ncol=2,leg_loc='best'):
+    ### output_path is the base sapphire output directory from config.yaml where the npz files, figures, etc. are 
+    ### runs is a list of dicts {'filename','color','label'} where filename should have a %s for chains to loop over 
+    ### optionally runs can also contain 'obs_color' and 'obs_label' if each run had different obs (e.g., forecasting bias/errorbars) 
+    ### figname should be None or the name of the figure file to save 
+    ### obs_varied_panels is a tuple of panels for which each run has different data, so the data should be plotted multiple times
+
+    ##### info needed to access/plot each panel in automated way
+    # TO DO: maybe move this up/elsewhere as global dict, simple helper function or input 
+    panel_info = {'smhm': {'obs_inds': (0, 2, 3), # indices of x, y, yerr from obs_stats tuple below for plt.errorbar
+                           'pred_key': 'pred_avg_smhm',
+                           'xlabel': r'$\log M_{\rm vir}/M_{\odot}$ (z=0)',
+                           'ylabel': r'$\log M_*/M_{\rm vir}$ (z=0)'},
+                  'fgas': {'obs_inds': (4, 6, 7),
+                           'pred_key': 'pred_avg_fgas',
+                           'xlabel': r'$\log M_*/M_{\odot}$ (z=0)',
+                           'ylabel': r'$\log M_{\rm ISM}/M_*$ (z=0)'},
+                  'mzr': {'obs_inds': (8, 10, 11),
+                          'pred_key': 'pred_avg_mzr',
+                          'xlabel': r'$\log M_*/M_{\odot}$ (z=0)',
+                          'ylabel': r'$\log Z_*/Z_{\odot}$ (z=0)'},
+                  'sfms': {'obs_inds': (12, 14, 15),
+                          'pred_key': 'pred_avg_sfms',
+                          'xlabel': r'$\log M_*/M_{\odot}$ (z=0)',
+                          'ylabel': r'$\log$ SFR / [$M_{\odot}$/yr] (z=0)'},
+                  'mzr_gas': {'obs_inds': (16, 18, 19),
+                          'pred_key': 'pred_avg_mzr_gas',
+                          'xlabel': r'$\log M_*/M_{\odot}$ (z=0)',
+                          'ylabel': r'$\log Z_{\rm ISM}/Z_{\odot}$ (z=0)'},}
     
     ### TO DO: generalize this for future more complicated flags or other constraint dtypes
-    def get_predictives(flag,obs_stats):
+    def get_predictives(run):
     
-        chain_preds_smhm, chain_preds_fgas, chain_preds_mzr = [],[],[]
+        # indexed by key in panels, value is shape (Nrealizations, Nbins)
+        chain_preds = {p: [] for p in panels}
     
         # TO DO: generalize depending on actual # of chains
         for cnum in range(0,4):
         
-            # TO DO: generalize this beyond numpyro_manga_chain%s_%s.npz
-            fname = os.path.join(output_path,'outputs',basestr%(cnum,flag))
+            # TO DO: generalize this beyond numpyro_manga_chain%s_{flag}.npz where {flag} is 111, 110, etc.
+            fname = os.path.join(output_path,'outputs',run['filename']%(cnum))
             npz_nuts = jnp.load(fname,allow_pickle=True)
-    
-            # just take the random posterior realizations without errorbars 
-            pred_avg_smhm = npz_nuts['samples'].item()['pred_avg_smhm']
-            pred_avg_fgas = npz_nuts['samples'].item()['pred_avg_fgas']
-            pred_avg_mzr = npz_nuts['samples'].item()['pred_avg_mzr']
-        
-            chain_preds_smhm.append(pred_avg_smhm)
-            chain_preds_fgas.append(pred_avg_fgas)
-            chain_preds_mzr.append(pred_avg_mzr)
+            samples = npz_nuts['samples'].item()
 
-        ### if obs_stats is None, use the (already-open) last npz file to extract obs_stats
-        # TO DO: generalize this for arbitrary summary statistics, and perhaps move to another function outside
-        if obs_stats == None:
-            # consider saving as dict['obs_stats'] = tuple to prevent npz error, and make it easier to load here/elsewhere
-            obs_stats = (npz_nuts['obs_x0_smhm'],npz_nuts['obs_bw_smhm'],npz_nuts['obs_avg_smhm'],npz_nuts['obs_err_smhm'],
-                         npz_nuts['obs_x0_fgas'],npz_nuts['obs_bw_fgas'],npz_nuts['obs_avg_fgas'],npz_nuts['obs_err_fgas'],
-                         npz_nuts['obs_x0_mzr'],npz_nuts['obs_bw_mzr'],npz_nuts['obs_avg_mzr'],npz_nuts['obs_err_mzr'])
+            # loop over and store posterior predictives for requested panels
+            for p in panels:
+                chain_preds[p].append(samples[panel_info[p]['pred_key']])
 
-        # if we didn't use obs_stats from file, then the input one will be returned
-        return jnp.vstack(chain_preds_smhm), jnp.vstack(chain_preds_fgas), jnp.vstack(chain_preds_mzr), obs_stats
+        # vstack the posterior predictives from all chains for each panel into shape (Nrealizations, Nbins)
+        for p in panels:
+            chain_preds[p] = jnp.vstack(chain_preds[p])
+
+        # extract obs_stats for run using last chain (different runs may have different obs_stats, but all chains should be same)
+        obs_stats = (npz_nuts['obs_x0_smhm'],npz_nuts['obs_bw_smhm'],npz_nuts['obs_avg_smhm'],npz_nuts['obs_err_smhm'],
+                     npz_nuts['obs_x0_fgas'],npz_nuts['obs_bw_fgas'],npz_nuts['obs_avg_fgas'],npz_nuts['obs_err_fgas'],
+                     npz_nuts['obs_x0_mzr'],npz_nuts['obs_bw_mzr'],npz_nuts['obs_avg_mzr'],npz_nuts['obs_err_mzr'],
+                     npz_nuts['obs_x0_sfms'],npz_nuts['obs_bw_sfms'],npz_nuts['obs_avg_sfms'],npz_nuts['obs_err_sfms'],
+                     npz_nuts['obs_x0_mzr_gas'],npz_nuts['obs_bw_mzr_gas'],npz_nuts['obs_avg_mzr_gas'],npz_nuts['obs_err_mzr_gas'])
+
+        return chain_preds, obs_stats
+
+    ### load all runs
     
-    preds_smhm_111, preds_fgas_111, preds_mzr_111, obs_stats = get_predictives('111',obs_stats)
-    preds_smhm_110, preds_fgas_110, preds_mzr_110, obs_stats = get_predictives('110',obs_stats)
-    preds_smhm_100, preds_fgas_100, preds_mzr_100, obs_stats = get_predictives('100',obs_stats)
+    run_preds, run_obs = [], []  # 1-1 mapped with runs 
+
+    for run in runs:
+        this_preds, this_obs = get_predictives(run) 
+        run_preds.append(this_preds)    
+        run_obs.append(this_obs)
 
     ##### PLOT
-    ### TO DO: generalize this for arbitrary predictives 
-    color_obs = 'k'
-    color_111, color_110, color_100 = 'orange', 'indigo', 'teal'
-    
-    fig, axes = plt.subplots(nrows=1,ncols=3,figsize=(11,3),constrained_layout=True)
-    ax_smhm, ax_fgas, ax_mzr = axes
-    
-    ##### first the data/constraints
-    ax_smhm.errorbar(obs_stats[0],obs_stats[2],yerr=obs_stats[3],
-                 fmt='-',color=color_obs,capsize=3,zorder=np.inf)
 
+    ### auto-initialize single row figure with as many columns as panels
+    fig, axes = plt.subplots(1,len(panels),figsize=(4*len(panels), 3),constrained_layout=True)
+    if len(panels) == 1:
+        axes = [axes]
+    
+    ### first plot observed constraints
+    for ax, p in zip(axes, panels):
+        ind_x, ind_y, ind_yerr = panel_info[p]['obs_inds']
+
+        # check whether this panel's observable was varied across runs, so we need to plot multiple lines
+        # panel_varied = any('obs_varied_panels' in run and p in run['obs_varied_panels'] for run in runs)
         
-    # axes[0].set_xscale('log')
-    ax_smhm.set_xlabel(r'$\log M_{\rm vir}/M_{\odot}$ (z=0)',fontsize=14)
-    ax_smhm.set_ylabel(r'$\log M_*/M_{\rm vir}$ (z=0)',fontsize=14)
+        # all runs have identical data, so only plot once
+        if obs_varied_panels in [None,False] or p not in obs_varied_panels: 
+            ax.errorbar(run_obs[0][ind_x],run_obs[0][ind_y],yerr=run_obs[0][ind_yerr],
+                        fmt='-',color='k',capsize=3,zorder=np.inf,label=obs_labels[p])
+        # for this panel/observable, each run has a different dataset, so plot it separately with its own label
+        elif p in obs_varied_panels:
+            for run, obs in zip(runs, run_obs):
+                ax.errorbar(obs[ind_x],obs[ind_y],yerr=obs[ind_yerr],
+                            fmt='-',color=run['obs_color'],capsize=3,zorder=np.inf,label=run['obs_label'])
+
+        ### for smhm panel, add f_b line 
+        if p == 'smhm':
+            fb_planck15 = Planck15.Ob0/Planck15.Om0
+            ax.axhline(np.log10(fb_planck15),color='gray',ls=':')
+            ax.text(0.02,0.88,r'$f_{\rm b}=0.158$ (Planck+15)',color='gray',fontsize=10,transform=ax.transAxes)
+                
     
-    ax_fgas.errorbar(obs_stats[4],obs_stats[6],yerr=obs_stats[7],
-                     fmt='-',capsize=3,zorder=np.inf,color=color_obs,label='data')
+        ax.set_xlabel(panel_info[p]['xlabel'], fontsize=14)
+        ax.set_ylabel(panel_info[p]['ylabel'], fontsize=14)    
+
+    ### next plot random draws from posterior
+
+    # first draw 100 random ints (this assumes every run has same num of samples, can easily be generalized)
+    drawnums = jax.random.choice(key(1),jnp.arange(run_preds[0][panels[0]].shape[0]),(100,),replace=False)
+
+    for inum, ival in enumerate(drawnums): # loop over random draws
+        for run, preds, obs in zip(runs, run_preds, run_obs): # loop over each run type
+            for ax, p in zip(axes, panels): # loop over each observable/panel 
+                
+                ax.plot(obs[panel_info[p]['obs_inds'][0]],preds[p][ival],
+                        '-',color=run['color'],alpha=0.2,lw=1,
+                        label=run['label'] if (inum==0 and ax is axes[0]) else '__none__')
     
-    # plt.xscale('log')
-    ax_fgas.set_xlabel(r'$\log M_*/M_{\odot}$ (z=0)',fontsize=14)
-    ax_fgas.set_ylabel(r'$\log M_{\rm ISM}/M_*$ (z=0)',fontsize=14)
-    
-    ax_mzr.errorbar(obs_stats[8],obs_stats[10],yerr=obs_stats[11],
-                     fmt='-',capsize=3,zorder=np.inf,color=color_obs)
-    
-    ax_mzr.set_xlabel(r'$\log M_*/M_{\odot}$ (z=0)',fontsize=14)
-    ax_mzr.set_ylabel(r'$\log Z_*/Z_{\odot}$ (z=0)',fontsize=14)
-    
-    ##### plot random draws from posterior
-    drawnums = jax.random.choice(key(1),jnp.arange(preds_smhm_111.shape[0]),(100,),replace=False)
-    # drawnums = np.arange(100)
-    
-    for inum,ival in enumerate(drawnums):
-        
-        ax_smhm.plot(obs_stats[0],preds_smhm_111[ival],'-',color=color_111,alpha=0.2,lw=1)
-        ax_smhm.plot(obs_stats[0],preds_smhm_110[ival],'-',color=color_110,alpha=0.2,lw=1)
-        ax_smhm.plot(obs_stats[0],preds_smhm_100[ival],'-',color=color_100,alpha=0.2,lw=1)
-    
-        ax_fgas.plot(obs_stats[4],preds_fgas_111[ival],'-',color=color_111,alpha=0.2,lw=1,
-                     label=r'SMHM+f$_{\rm gas}$+MZR' if inum==0 else '__none__')
-        ax_fgas.plot(obs_stats[4],preds_fgas_110[ival],'-',color=color_110,alpha=0.2,lw=1,label=r'SMHM+f$_{\rm gas}$' if inum==0 else '__none__')
-        ax_fgas.plot(obs_stats[4],preds_fgas_100[ival],'-',color=color_100,alpha=0.2,lw=1,label=r'SMHM' if inum==0 else '__none__')
-    
-        ax_mzr.plot(obs_stats[8],preds_mzr_111[ival],'-',color=color_111,alpha=0.2,lw=1)
-        ax_mzr.plot(obs_stats[8],preds_mzr_110[ival],'-',color=color_110,alpha=0.2,lw=1)
-        ax_mzr.plot(obs_stats[8],preds_mzr_100[ival],'-',color=color_100,alpha=0.2,lw=1)
-    
-    leg = ax_fgas.legend(fontsize=8.5,fancybox=True,framealpha=1,ncol=2,loc='lower center')
-    leg.get_lines()[0].set_alpha(1.0)
+    for axnum,ax in enumerate(axes):
+        leg = ax.legend(fontsize=8.5,fancybox=True,framealpha=1,ncol=leg_ncol,loc=leg_loc)
+        # if panels[axnum] in :
+            # leg.get_lines()[0].set_alpha(1.0)
     
 
     ### if requested, save figure
-    if savefig is True:
-        outfile = os.path.join(output_path,'figures',
-                               # since this is run dependent, for now just prepend "trace" to original filename 
-                               # e.g., numpyro_manga_chain%s_111.npz becomes trace_numpyro_manga_111.png
-                               # TO DO: how to improve/generalize this?
-                              'posterior_predictives_'+(basestr.replace('_chain%s','').replace('_%s','').replace('.npz','.png')))
+    if figname not in [None, False]:
+        outfile = os.path.join(output_path,'figures',figname)
         plt.savefig(outfile,bbox_inches='tight',dpi=300,facecolor='w')
         print('saved %s'%outfile,flush=True)
-        
+    
     return fig, axes
             
     ### 
