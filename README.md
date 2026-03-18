@@ -51,4 +51,46 @@ Then try running ```sapphire/demo/prior_predictive_checks.ipynb```. You will nee
 Link to GitHub Wiki or MkDocs/ReadTheDocs forthcoming
 
 
+## Citation and Acknowledgement Policy
+sapphire is made publicly available under an MIT License with original copyright held by Viraj Pandya. The LICENSE file in the root repository must be preserved if you use, adapt or fork the code in this repository. You are welcome to add your own license to that baseline MIT License.
 
+If you use sapphire in your work, you must include the following line in the acknowledgements: 
+
+> We used the \texttt{sapphire} code \citep{pandya23,pandya26} whose origins trace back to the PhD thesis of \citet{pandya21thesis}, which grew out of the Simulating Multi-scale Astrophysics to Understand Galaxies (SMAUG) project and was later integrated into the Simons Collaboration on Learning the Universe, with funding provided by NASA Hubble Fellowship HST-HF2-51489, NSF Astronomy and Astrophysics Grant 2307419 and NSF Graduate Research Fellowship 1339067.
+
+If you did not use the code or outputs as-is but found the approach useful, we ask that you still cite these works:
+
+```
+<<<<<<<<<<
+- add Pandya+26 when submitted
+- expand this to include subsequent papers by other sapphire developers
+>>>>>>>>>>
+
+@ARTICLE{pandya23,
+       author = {{Pandya}, Viraj and {Fielding}, Drummond B. and {Bryan}, Greg L. and {Carr}, Christopher and {Somerville}, Rachel S. and {Stern}, Jonathan and {Faucher-Gigu{\`e}re}, Claude-Andr{\'e} and {Hafen}, Zachary and {Angl{\'e}s-Alc{\'a}zar}, Daniel and {Forbes}, John C.},
+        title = "{A Unified Model for the Coevolution of Galaxies and Their Circumgalactic Medium: The Relative Roles of Turbulence and Atomic Cooling Physics}",
+      journal = {\apj},
+     keywords = {Circumgalactic medium, Galactic winds, Galaxy evolution, Galaxy accretion, Cooling flows, Hydrodynamical simulations, Analytical mathematics, 1879, 572, 594, 575, 2028, 767, 38, Astrophysics - Astrophysics of Galaxies},
+         year = 2023,
+        month = oct,
+       volume = {956},
+       number = {2},
+          eid = {118},
+        pages = {118},
+          doi = {10.3847/1538-4357/acf3ea},
+archivePrefix = {arXiv},
+       eprint = {2211.09755},
+ primaryClass = {astro-ph.GA},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2023ApJ...956..118P},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+
+@PHDTHESIS{pandya21thesis,
+       author = {{Pandya}, Viraj.},
+        title = "{Semi-Analytic Modeling of Galaxy Formation for the Future: The Challenge of Emulating Cosmological Hydrodynamical Simulations}",
+       school = {University of California, Santa Cruz},
+         year = 2021,
+        month = aug
+}
+
+```
