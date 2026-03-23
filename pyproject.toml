@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sapphire-jax"
-version = "0.13"
+version = "0.133"
 authors = [
   { name="Viraj Pandya", email="viraj.pandya@gmail.com" },
 ]
@@ -27,4 +27,5 @@ Homepage = "https://github.com/virajpandya/sapphire"
 Issues = "https://github.com/virajpandya/sapphire/issues"
 
 [tool.setuptools.packages.find]
-where = ["sapphire"]
+where = ["."]
+include = ["sapphire*"]
