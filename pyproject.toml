@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sapphire-jax"
+version = "0.13"
+authors = [
+  { name="Viraj Pandya", email="viraj.pandya@gmail.com" },
+]
+description = "JAX-based simulator of galaxy population evolution"
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research"
+]
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+dependencies = ["jax>=0.9.0","jaxlib>=0.9.0","diffrax>=0.7.0","equinox>=0.13.4","numpyro>=0.20.0","optax>=0.2.6",
+                "matplotlib","multiprocess","astropy","chainconsumer","numpy","scipy","pandas","seaborn"]
+keywords = ["jax","sapphire","galaxy","formation","evolution","astrophysics","cosmology","dynamical systems","differential equations","semi-analytic model"]
+urls = {repository = "https://github.com/virajpandya/sapphire"}
+
+[project.urls]
+Homepage = "https://github.com/virajpandya/sapphire"
+Issues = "https://github.com/virajpandya/sapphire/issues"
+
+[tool.setuptools.packages.find]
+where = ["sapphire"]
