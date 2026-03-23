@@ -1,8 +1,15 @@
 # sapphire
-sapphire is a JAX-based framework for modeling the dynamical phase space evolution of galaxy populations. 
+sapphire is a framework for modeling the dynamical phase space evolution of galaxy populations. The code is written from scratch entirely in JAX (Bradbury et al. 2018) using the diffrax differential equation solver package (Kidger 2022), making it end-to-end differentiable and GPU-parallelized. It is designed to be modular, numerically robust and Bayesian. sapphire is the culmination of work led by Viraj Pandya during his PhD thesis ([Pandya et al. 2021](https://escholarship.org/uc/item/9xc1v7c9), comprising [Pandya et al. 2020](https://ui.adsabs.harvard.edu/abs/2020ApJ...905....4P/abstract) and [Pandya et al. 2021](https://ui.adsabs.harvard.edu/abs/2021MNRAS.508.2979P/abstract)) and NASA Hubble Prize Postdoctoral Fellowship ([Pandya et al. 2023](https://ui.adsabs.harvard.edu/abs/2023ApJ...956..118P/abstract), Pandya et al. 2026) with the goal of transforming galaxy formation into an interpretable precision science. 
+
+Figure 1 from Pandya et al. (2026) provides a schematic overview of the interdisciplinary dynamical systems approach taken by sapphire to enable hybrid physics-informed, data-driven modeling of galaxy formation. 
 
 <img width="3200" height="1800" alt="pandya26_sapphire" src="https://github.com/user-attachments/assets/38b18df2-c097-4518-add2-f3493a2d948b" />
-Figure Credit: Viraj Pandya and Pandya et al. (2026).
+
+<br>
+
+Figure 1 from [Pandya et al. (2023)](https://ui.adsabs.harvard.edu/abs/2023ApJ...956..118P/abstract) illustrates our new baseline physical model, which comprises eight nonlinearly coupled ordinary differential equations that describe how mass, metals and energy flow between galaxies and their gaseous atmospheres.
+
+<img width="917" height="664" alt="image" src="https://github.com/user-attachments/assets/e8a57ffa-c78c-40b6-91db-e6af51efff05" />
 
 ## Installation instructions 
 
