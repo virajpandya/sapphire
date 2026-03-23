@@ -18,7 +18,6 @@ classifiers = [
 ]
 license = "MIT"
 license-files = ["LICENSE"]
-readme = "README.md"
 dependencies = ["jax>=0.9.0","jaxlib>=0.9.0","diffrax>=0.7.0","equinox>=0.13.4","numpyro>=0.20.0","optax>=0.2.6",
                 "matplotlib","multiprocess","astropy","chainconsumer","numpy","scipy","pandas","seaborn"]
 keywords = ["jax","sapphire","galaxy","formation","evolution","astrophysics","cosmology","dynamical systems","differential equations","semi-analytic model"]
