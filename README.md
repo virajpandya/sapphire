@@ -47,7 +47,16 @@ python -m ipykernel install --user --name yourenvname
 ```
 
 ### Installation with GPU support
-<<< instructions forthcoming >>>
+This is pretty much similar to above except the mamba environment you create must install jax and jaxlib with GPU-support. Currently sapphire is only tested on Nvidia GPUs -- best to follow the instructions on the Nvidia and JAX website for installing the relevant CUDA drivers beforehand. Afterwards, in principle it's as simple as: 
+
+```
+mamba create -n yourenvname python=3.12 
+mamba activate yourenvname
+pip install --upgrade "jax[cuda12]" # or [cuda13] depending on what Nvidia drivers you have installed
+# then pip install the other sapphire dependencies in environment.yml
+```
+
+We recommend installing a single environment with GPU support since that automatically comes with CPU support (if/when no GPUs are auto-detected by JAX).
 
 ## Quick example
 Go to https://binder.flatironinstitute.org/, enter "vpandya" for host user and "sapphire" for project name. This will automatically create an environment with the required python packages, so you only need to clone/upload and follow the pip installation instructions for sapphire and its data tarball.
