@@ -23,7 +23,7 @@ jax_config.update("jax_enable_x64", True) # required to accurately solve and tak
 import jax.numpy as jnp
 from jax._src.third_party.scipy.interpolate import RegularGridInterpolator as jax_RegularGridInterpolator
 from jax import jit, grad, vmap, pmap, debug, jvp, vjp, jacrev, jacfwd, make_jaxpr, hessian, value_and_grad
-from jax_cosmo.scipy.interpolate import InterpolatedUnivariateSpline    
+# from jax_cosmo.scipy.interpolate import InterpolatedUnivariateSpline    
 from jax.experimental.ode import odeint
 from jax.lax import fori_loop, while_loop
 from jax.scipy.integrate import trapezoid
@@ -33,6 +33,7 @@ from diffrax import backward_hermite_coefficients, CubicInterpolation
 from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec, NamedSharding
+from interpax import Interpolator1D
 
 
 """ Nov 4, 2025 -- wrap the entire thing, later will refactor to use classes with equinox """
@@ -70,9 +71,22 @@ def setup(config):
     # interpolate cosmology functions since its easier than analytic ones for now
     zarr = jnp.linspace(10.0,0.0,100)
     tarr = Planck15.age(zarr).value # Gyr
-    interp_rhocrit_z = jit(InterpolatedUnivariateSpline(jnp.asarray(zarr),jnp.asarray(Planck15.critical_density(zarr).value),k=3))
-    interp_Om_z = jit(InterpolatedUnivariateSpline(jnp.asarray(zarr),jnp.asarray(Planck15.Om(zarr)),k=3))
-    interp_redshift = jit(InterpolatedUnivariateSpline(jnp.asarray(tarr),jnp.asarray(zarr),k=3))
+    rhocrit_arr = jnp.asarray(Planck15.critical_density(zarr).value)
+    Om_arr = jnp.asarray(Planck15.Om(zarr))
+    
+    # interp_rhocrit_z = jit(InterpolatedUnivariateSpline(jnp.asarray(zarr),rhocrit_arr,k=3))
+    # interp_Om_z = jit(InterpolatedUnivariateSpline(jnp.asarray(zarr),Om_arr,k=3))
+    # interp_redshift = jit(InterpolatedUnivariateSpline(jnp.asarray(tarr),jnp.asarray(zarr),k=3))
+
+    ### March 2026 -- note that interpax returns a function, unlike above, so need to do .__call__
+    interp_rhocrit_z = jit(Interpolator1D(zarr[::-1],rhocrit_arr[::-1], method="cubic2",
+                                          extrap=(rhocrit_arr[-1], rhocrit_arr[0])).__call__)
+    
+    interp_Om_z = jit(Interpolator1D(zarr[::-1],Om_arr[::-1], method="cubic2",
+                                     extrap=(Om_arr[-1], Om_arr[0])).__call__)
+    
+    interp_redshift = jit(Interpolator1D(tarr,jnp.asarray(zarr), method="cubic2",
+                                         extrap=(zarr[0], zarr[-1])).__call__)    
     
     ### coolfunc
     from sapphire.utils import read_coolfunc

@@ -103,12 +103,12 @@ sampling_config:
 
 # if you want to run inference -- ONLY if runtype == 'inference' above 
 inference_config:
-    engine: 'nuts' # adam, nuts
+    engine: 'adam' # adam, nuts
     adam_logL: 'manual' # manual, numpyro; did the user define a logL manually or with a probabilistic programming language 
     Nadam: 3 # number of initial guesses / trajectories for adam
 
     # if True, will use mock_err below and sampling_config above
-    fit_mock: False
+    fit_mock: True
       
     # False = user inputs true mock params in sampling_config above
     # True = sample single set of mock params (w/ bounds in sampling_config) and merge w/ fixed_params_astro above otherwise
@@ -118,7 +118,7 @@ inference_config:
     write_output: True
 
     # toggle using observational constraints and path to file
-    fit_obs: True
+    fit_obs: False
 
     ### numpyro HMC/NUTS options
     num_warmup: 1000
@@ -170,7 +170,7 @@ obs_name: 'manga' # so far: manga, lit or mix
 # NOTE: perhaps write a script that automates generation (and/or submission of) disbatch task file
 # NOTE: perhaps add more customization options here for prefix, suffix, generic filename format, etc.
 output_path: '/mnt/ceph/users/vpandya/sapphire_outputs/'
-output_suffix: '{flag_smhm}{flag_fgas}{flag_mzr_gas}_slope4_mzrgas' # will be pre-pended by f so variables get filled in
+output_suffix: '{flag_smhm}{flag_fgas}{flag_mzr_gas}_interpax' # will be pre-pended by f so variables get filled in
 output_prefix: 'numpyro_{obs_name}_chain{chain_num}'
 
 # 

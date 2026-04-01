@@ -16,7 +16,7 @@ import jax
 import jax.numpy as jnp
 from jax._src.third_party.scipy.interpolate import RegularGridInterpolator as jax_RegularGridInterpolator
 from jax import jit, grad, vmap, pmap, debug, jvp, vjp, jacrev, jacfwd, make_jaxpr, hessian, value_and_grad
-from jax_cosmo.scipy.interpolate import InterpolatedUnivariateSpline    
+# from jax_cosmo.scipy.interpolate import InterpolatedUnivariateSpline    
 from jax.experimental.ode import odeint
 from jax.lax import fori_loop, while_loop
 from jax.scipy.integrate import trapezoid
@@ -179,13 +179,7 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
         elif len(jax.devices('gpu')) == 1: # single GPU case just involves a nested vmap over params, then over halos
             print('vmapping batch_solve over single GPU for params and halos')
             batch_solve = jit(vmap(vmap(single_solve,in_axes=(0,None)),in_axes=(None,0))) 
-        
-        
-        
-    # this would never be used since sampling is preferred (or the user can manually re-call sapphire.run with few input dicts each time)
-    # if a bunch of fixed param sets are input, strategy depends on Ndevices vs. Nsamples (for CPU), doesn't matter for GPU
-    elif config['runtype'] in ['multi']:
-        raise NotImplementedError('multi runtype not yet implemented')    
+          
     else:
         raise ValueError('runtype must be one of single, sampling or inference')    
 

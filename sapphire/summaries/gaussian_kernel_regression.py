@@ -15,7 +15,7 @@ import jax
 import jax.numpy as jnp
 from jax._src.third_party.scipy.interpolate import RegularGridInterpolator as jax_RegularGridInterpolator
 from jax import jit, grad, vmap, pmap, debug, jvp, vjp, jacrev, jacfwd, make_jaxpr, hessian, value_and_grad
-from jax_cosmo.scipy.interpolate import InterpolatedUnivariateSpline    
+# from jax_cosmo.scipy.interpolate import InterpolatedUnivariateSpline    
 from jax.experimental.ode import odeint
 from jax.lax import fori_loop, while_loop
 from jax.scipy.integrate import trapezoid
