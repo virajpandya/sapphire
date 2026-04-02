@@ -22,8 +22,8 @@ model: 'pandya23'
 # NOTE: this will be moved within a physical_config combined with model above 
 coolfunc: 'sd93'
 
-# must be 'single', 'sampling' or 'inference' 
-runtype: 'inference'
+# must be 'single', 'sampling', 'inference', 'benchmark'
+runtype: 'benchmark'
 
 ### moving these outside to prevent complicated nested dict merge 
 rng_sample: 1 # RNG key used for sampling 
@@ -79,14 +79,14 @@ params_fixed_astro:
 # this determines how sampling is done for training set generation or the true mock parameters for inference
 sampling_config: 
     # posterior, latin_hypercube
-    method: 'posterior' 
+    method: 'latin_hypercube' 
 
     # this is to be used with method='posterior' above, and will be appended to output_path/outputs below
     # this should have 'chain%s' in it for all integer chain nums to be read in and merged
     posterior_file: 'numpyro_mix_chain%s_111_slope4_mzrgas.npz'
 
     # if on CPU or multi-GPU, MUST be equal to or an integer multiple of devices
-    Nsamples: 100 
+    Nsamples: 1000 
     
     # this simultaneously specifies which params are free and their bounds for Uniform sampling
     # NOTE: this could be made more general for non-Uniform priors
@@ -167,10 +167,11 @@ obs_name: 'manga' # so far: manga, lit or mix
 
 # where to store npz outputs, figures 
 # sapphire will automatically generate subdirectories for outputs, figures, 
+# any {config_variable} will be pre-pended by f so variables get filled in
 # NOTE: perhaps write a script that automates generation (and/or submission of) disbatch task file
 # NOTE: perhaps add more customization options here for prefix, suffix, generic filename format, etc.
 output_path: '/mnt/ceph/users/vpandya/sapphire_outputs/'
-output_suffix: '{flag_smhm}{flag_fgas}{flag_mzr_gas}_interpax' # will be pre-pended by f so variables get filled in
-output_prefix: 'numpyro_{obs_name}_chain{chain_num}'
+output_suffix: '4gpu' #'{flag_smhm}{flag_fgas}{flag_mzr_gas}_interpax' 
+output_prefix: '' #'numpyro_{obs_name}_chain{chain_num}'
 
 # 

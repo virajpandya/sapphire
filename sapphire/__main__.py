@@ -39,7 +39,7 @@ def main():
     parser.add_argument("--scale_err_mzr", type=float,default=1.0) 
     parser.add_argument("--scale_err_sfms", type=float,default=1.0)   
     parser.add_argument("--scale_err_mzr_gas", type=float,default=1.0)     
-    parser.add_argument("--output_suffix",type=str,default="{flag_smhm}{flag_fgas}{flag_mzr_gas}")
+    parser.add_argument("--output_suffix",type=str,default='')
     # parser.add_argument("--obs_name", type=str)  
     # parser.add_argument("--obs_path", type=str)  
 

@@ -54,11 +54,10 @@ def run(config):
     # if multiple CPU cores requested, set environment flag (idiosyncrasy of jax on CPUs)
     # NOTE: there has to be a cleaner, compact way to load all of these jax packages up top... 
     
-    import jax    
-    import jax.numpy as jnp
-
+    import jax   
     jax.config.update("jax_enable_x64", True) # required to accurately solve and take gradients through our diffeqs 
     jax.config.update('jax_num_cpu_devices', config['num_cpus']) # newer jax versions don't need the XLA environment flag above
+    import jax.numpy as jnp
     
     print('jax version',jax.__version__,flush=True)
     print('jax devices',jax.devices(),flush=True)
@@ -92,23 +91,13 @@ def run(config):
 
     # this should already be configured to be compatible with full_params_arr and free_params_arr based on config['runtype'] 
     batch_solve = solver.setup(config,integrator,saveat_fn,halo_matrix,halo_coeff_matrix,halo_tinit,ts_interp)
-    
-    ### automatically run 
-    print('benchmarking full-batch ODE runtime for runtype=%s...'%config['runtype'],flush=True) 
 
-    ### Finally solve the ODEs for single or multiple halos
-    # this is clunky, can push the solve down to sapphire.solvers.diffrax itself, returning batch_solve only for inference later 
-    
-    tstart = timer()
-    sol = batch_solve(halo_index,full_params_arr)
-    print(sol.ys[0][0][0],flush=True)
-    print('full-batch initial jit+sol took %.3f sec'%(timer()-tstart),flush=True)
 
-    if config['post_jit_benchmark'] is True: 
-        tstart = timer()
-        sol = batch_solve(halo_index,full_params_arr)
-        print(sol.ys[0][0][0],flush=True)
-        print('full-batch jitted sol took %.3f sec'%(timer()-tstart),flush=True)
+    if config['runtype'] == 'benchmark':
+        from sapphire.utils import benchmark_runtime
+        out_sapphire = benchmark_runtime.start(config,batch_solve,halo_index,full_params_arr,free_params_arr)
+
+        
 
     
     """ 
@@ -117,6 +106,24 @@ def run(config):
     
     # NOTE: also add option to return extracted quantities and summary statistics
     if config['runtype'] in ['single','sampling']: 
+
+        ### automatically run 
+        print('benchmarking full-batch ODE runtime for runtype=%s...'%config['runtype'],flush=True) 
+    
+        ### Finally solve the ODEs for single or multiple halos
+        # this is clunky, can push the solve down to sapphire.solvers.diffrax itself, returning batch_solve only for inference later 
+        
+        tstart = timer()
+        sol = batch_solve(halo_index,full_params_arr)
+        print(sol.ys[0][0][0],flush=True)
+        print('full-batch initial jit+sol took %.3f sec'%(timer()-tstart),flush=True)
+    
+        if config['post_jit_benchmark'] is True: 
+            tstart = timer()
+            sol = batch_solve(halo_index,full_params_arr)
+            print(sol.ys[0][0][0],flush=True)
+            print('full-batch jitted sol took %.3f sec'%(timer()-tstart),flush=True)
+        
         print('returning sol...',flush=True)
         
         # prepare generic out_sapphire tuple to be returned at end below
