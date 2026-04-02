@@ -112,6 +112,7 @@ def single_random(config):
 
 
 ##### latin hypercube sampling [this is pseudo-lhs... need to put in the random shuffling step]
+### TO DO: with dicts generalize this to any arbitrary input set of parameters
 def latin_hypercube_sampling(config):
 
     sampling_config = config['sampling_config']
@@ -243,8 +244,9 @@ def posterior_samples(config):
 
 def get(config):
 
-    if config['runtype'] not in ['single','sampling','inference']:
-        raise ValueError('config.runtype must be one of single, sampling, inference')
+    # TO DO: move this elsewhere (probably to utils/read_config.py)
+    if config['runtype'] not in ['single','sampling','inference','benchmark']:
+        raise ValueError('config.runtype must be one of single, sampling, inference, interactive')
     
     sampling_config = config['sampling_config']
     inference_config = config['inference_config'] 
@@ -256,7 +258,7 @@ def get(config):
     elif config['runtype'] == 'inference' and inference_config['random_mock']==True:
         return single_random(config)
     
-    elif config['runtype'] == 'sampling' and sampling_config['method'] == 'latin_hypercube': 
+    elif config['runtype'] in ['sampling','benchmark'] and sampling_config['method'] == 'latin_hypercube': 
         return latin_hypercube_sampling(config)
 
     elif config['runtype'] == 'sampling' and sampling_config['method'] == 'posterior':
