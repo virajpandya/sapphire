@@ -97,18 +97,17 @@ def run(config):
         from sapphire.utils import benchmark_runtime
         out_sapphire = benchmark_runtime.start(config,batch_solve,halo_index,full_params_arr,free_params_arr)
 
-        
 
-    
-    """ 
-    add module here to optionally compress+save data directly for TSG/ILI when in 'sampling' mode
-    """
+    ##### modularize the following (especially runtype=inference with engine=nuts)
     
     # NOTE: also add option to return extracted quantities and summary statistics
     if config['runtype'] in ['single','sampling']: 
 
         ### automatically run 
         print('benchmarking full-batch ODE runtime for runtype=%s...'%config['runtype'],flush=True) 
+
+        ### in this case, batch_solve is actually (batch_solve, batch_jacfwd) -- see solvers/diffrax.py
+        batch_solve, batch_jacfwd = batch_solve
     
         ### Finally solve the ODEs for single or multiple halos
         # this is clunky, can push the solve down to sapphire.solvers.diffrax itself, returning batch_solve only for inference later 
@@ -123,16 +122,51 @@ def run(config):
             sol = batch_solve(halo_index,full_params_arr)
             print(sol.ys[0][0][0],flush=True)
             print('full-batch jitted sol took %.3f sec'%(timer()-tstart),flush=True)
-        
-        print('returning sol...',flush=True)
+
         
         # prepare generic out_sapphire tuple to be returned at end below
-        out_sapphire = (sol, free_params_arr, )
+        out_sapphire = (sol, free_params_arr,)
+
+        ### if requested, also compute sensitivity jacobians
+        if config['return_sensitivity_jacobians'] is True:
+
+            print('computing sensitivity jacobians...',flush=True)
+
+            # for jacfwd, slice subset of full_params_arr to just be the free indices 
+            # TO DO: generalize this and clean it up  [just like in utils/benchmark_runtime.py]
+            inds_wanted = jnp.array([0,1,4,5,8,9,12,13])
+            if config['runtype'] == 'single':
+                full_params_arr_wanted = full_params_arr[inds_wanted]
+            elif config['runtype'] == 'sampling':
+                full_params_arr_wanted = full_params_arr[:,inds_wanted]
+            
+            ### note the different call signature / args for batch_jacfwd (see solvers/diffrax.py)    
+            tstart = timer()
+            sol_jac = batch_jacfwd(full_params_arr_wanted,halo_index,full_params_arr)
+            print(sol_jac[0],flush=True)
+            print('full-batch initial jit jacobian took %.3f sec'%(timer()-tstart),flush=True)
+
+            if config['post_jit_benchmark'] is True:
+                tstart = timer()
+                sol_jac = batch_jacfwd(full_params_arr_wanted,halo_index,full_params_arr)
+                print(sol_jac[0],flush=True)
+                print('full-batch jitted jacobian took %.3f sec'%(timer()-tstart),flush=True)
+
+            # append jacobian to return
+            out_sapphire += (jnp.squeeze(sol_jac),)
+            
+    """ 
+    add module here to optionally compress+save data directly for TSG/ILI when in 'sampling' mode
+    """
     
     ### alternatively run inference if requested
     ######### Can this whole thing be put into a sapphire.inference wrapper module to keep driver / __ clean?
     if config['runtype'] in ['inference']: # can merge Lucas' ILI option in the future
 
+        ### in this case, batch_solve is actually (batch_solve, batch_jacfwd) -- see solvers/diffrax.py
+        # for runtype=inference, we only need batch_solve -- sapphire/inference module will compute grad(loss) on its own
+        batch_solve, batch_jacfwd = batch_solve
+        
         from sapphire import inference
         
         inference_config = config['inference_config']
@@ -148,13 +182,19 @@ def run(config):
         
         if inference_config['fit_mock'] is True:
 
-            true_params = free_params_arr
+            true_params = free_params_arr # NOTE: is this renaming necessary for below? check when modularizing/refactoring... 
             print('true mock parameters\n',free_params_arr,flush=True)          
             
             print('summarizing mock data...',flush=True)
             # TO DO: push this import earlier, and use __init__ to load only summaries parent module
             import sapphire.summaries.gaussian_kernel_regression as gkr # can generalize later
 
+            # need to solve true mock sol
+            tstart = timer()
+            sol = batch_solve(halo_index,full_params_arr) 
+            print(sol.ys[0][0][0],flush=True)
+            print('full-batch initial jit+sol took %.3f sec'%(timer()-tstart),flush=True)
+            
             # although these are mocks, we use the same obs_ prefix for consistency with rest of code below
             # NOTE: return order of obs_stats is same order as expected by sapphire.inference module below
             obs_stats = gkr.summarize_mock(sol)

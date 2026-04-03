@@ -135,17 +135,35 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
         
         return sol_diffrax
     
+    """ set up jacfwd of single_solve for (possibly batched) sensitivity analysis """
+
+    # only want jacfwd wrt to specific parameters [this should be same as in utils/benchmark_runtime.py]
+    ### TO DO: generalize and turn into dict for better readability 
+    inds_wanted = jnp.array([0,1,4,5,8,9,12,13])
     
-    """ wrap with vmap or shardmap+vmap depending on Ndevices and TSG vs on-the-fly inference """
+    """ July 7 -- first a wrapper to only autodiff wrt free parameters, not full """
+    def autodiff_jac(params_free,halo_index,params_full):
+    
+        # need to use params_free somewhere (otherwise jac entries are 0) so just replace params_full with it 
+        params_full = params_full.at[inds_wanted].set(params_free)
+        
+        return single_solve(halo_index,params_full).ys[0]    
+
+
+    
+    """ 
+    wrap with vmap or shardmap+vmap depending on Ndevices and TSG vs on-the-fly inference 
+    TO DO: maybe this could be further modularized
+    """
+
+    # first set up device mesh [so far this is universal to any runtype below but may be made more sophisticated in future]
+    mesh = Mesh(mesh_utils.create_device_mesh((Ndevices,)), axis_names=('i',))  
 
     # only evaluating single parameter set at a time, so parallelization happens over halos, not parameter sets 
     if config['runtype'] in ['single','inference']: 
     
         if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) > 1:
             print('parallelizing batch_solve with shard_map over multi-CPU/GPU for halos only',flush=True)
-        
-            # first set up device mesh
-            mesh = Mesh(mesh_utils.create_device_mesh((Ndevices,)), axis_names=('i',))
         
             batch_solve = jit(shard_map(vmap(single_solve,in_axes=(0,None)),
                                         mesh=mesh,in_specs=(PartitionSpec('i'),PartitionSpec(None)),
@@ -156,7 +174,20 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
         
             batch_solve = jit(vmap(single_solve,in_axes=(0,None)))
 
-        return batch_solve
+        ### April 2026 -- port over batch_jacfwd as well from old ipynb
+        ### note: this is really only for runtype='single' -- 'inference' mode computes grad(loss) separately sapphire/inference/
+        if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) > 1:
+            print('autodiff over multi-CPU/GPU for runtype=single',flush=True)
+            batch_jacfwd = jit(shard_map(vmap(jacfwd(autodiff_jac),in_axes=(None,0,None)),
+                                        mesh=mesh,
+                                        in_specs=(PartitionSpec(None),PartitionSpec('i'),PartitionSpec(None)), # shard over halo_index, not params
+                                        out_specs=PartitionSpec('i'),check_rep=False)) 
+            
+        elif len(jax.devices('gpu')) == 1:
+            print('autodiff over single GPU for runtype=single',flush=True)
+            batch_jacfwd = jit(vmap(jacfwd(autodiff_jac),in_axes=(None,0,None)))
+        
+        return batch_solve, batch_jacfwd
 
     # here, we are evaluating multiple parameter combos for Nbatch_halos, so parallelization should happen over param sets (typically thousands)
     # nov 2025 -- enforce that on CPU Nsamples at minimum = Ndevices, otherwise integer multiple of Ndevices (on GPU doesn't matter)
@@ -167,21 +198,34 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
         if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) > 1:
             
             print('parallelizing batch_solve over multiple CPU/GPU for params and halos')
-            # first set up device mesh
-            mesh = Mesh(mesh_utils.create_device_mesh((Ndevices,)), axis_names=('i',))
             
             # now shard_map over CPU/GPU devices available 
             batch_solve = jit(shard_map(vmap(vmap(single_solve,in_axes=(0,None)),in_axes=(None,0)),
                                         mesh=mesh,
-                                        # note since halo_index is single int, don't need P(None)
                                         in_specs=(PartitionSpec(None),PartitionSpec('i')), # shard over params, not halo_index
                                         out_specs=PartitionSpec('i'),check_rep=False)) 
         
         elif len(jax.devices('gpu')) == 1: # single GPU case just involves a nested vmap over params, then over halos
-            print('vmapping batch_solve over single GPU for params and halos')
+            print('vmapping batch_solve over single GPU for params and halos',flush=True)
             batch_solve = jit(vmap(vmap(single_solve,in_axes=(0,None)),in_axes=(None,0))) 
 
-        return batch_solve
+        ### April 2026 -- port over batch_jacfwd as well from old ipynb
+        if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) > 1:
+            
+            print('autodiff over multi-CPU/GPU for runtype=sampling',flush=True)
+            
+            # now shard_map over CPU/GPU devices available 
+            batch_jacfwd = jit(shard_map(vmap(vmap(jacfwd(autodiff_jac),in_axes=(None,0,None)),in_axes=(0,None,0)),
+                                        mesh=mesh,
+                                        in_specs=(PartitionSpec('i'),PartitionSpec(None),PartitionSpec('i')), 
+                                        out_specs=PartitionSpec('i'),check_rep=False)) 
+        
+        elif len(jax.devices('gpu')) == 1: # single GPU case just involves a nested vmap over params, then over halos
+            
+            print('autodiff over single GPU for runtype=sampling',flush=True)
+            batch_jacfwd = jit(vmap(vmap(jacfwd(autodiff_jac),in_axes=(None,0,None)),in_axes=(0,None,0)))
+        
+        return batch_solve, batch_jacfwd
 
     ##### april 2026 -- for runtime benchmarking 
     elif config['runtype'] == 'benchmark':
@@ -189,41 +233,23 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
         #### first for just running [only need one inner vmap unlike for 'sampling' above]
         if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) > 1:
             
-            print('for benchmarking: parallelizing batch_solve over multiple CPU/GPU for params and halos')
-            # first set up device mesh
-            mesh = Mesh(mesh_utils.create_device_mesh((Ndevices,)), axis_names=('i',))
+            print('for runtype=benchmark: parallelizing batch_solve over multiple CPU/GPU for params and halos',flush=True)
             
             # now shard_map over CPU/GPU devices available 
             batch_solve = jit(shard_map(vmap(single_solve,in_axes=(0,0)),
                                         mesh=mesh,
-                                        # note since halo_index is single int, don't need P(None)
                                         in_specs=(PartitionSpec('i'),PartitionSpec('i')), # shard over params, not halo_index
                                         out_specs=PartitionSpec('i'),check_rep=False)) 
         
         elif len(jax.devices('gpu')) == 1: # single GPU case just involves a nested vmap over params, then over halos 
-            print('vmapping batch_solve over single GPU for params and halos')
+            print('for runtype=benchmark: vmapping batch_solve over single GPU for params and halos',flush=True)
             batch_solve = jit(vmap(single_solve,in_axes=(0,0)))
 
         ### next for jacobian 
 
-        # only want jacfwd wrt to specific parameters [this should be same as in utils/benchmark_runtime.py]
-        ### TO DO: generalize
-        inds_wanted = jnp.array([0,1,4,5,8,9,11,12,13])
-        
-        """ July 7 -- first a wrapper to only autodiff wrt free parameters, not full """
-        def autodiff_jac(params_free,halo_index,params_full):
-        
-            # need to use params_free somewhere (otherwise jac entries are 0) so just replace params_full with it 
-            params_full = params_full.at[inds_wanted].set(params_free)
-            
-            return single_solve(halo_index,params_full).ys[0]
-
         # June 16 -- multi-CPU-core and multi-GPU are same call structure
         if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) > 1:
-            print('for benchmarking: parallelizing autodiff over multi-CPU/GPU')
-            
-            # first set up device mesh
-            mesh = Mesh(mesh_utils.create_device_mesh((Ndevices,)), axis_names=('i',))
+            print('for runtype=benchmark: parallelizing autodiff over multi-CPU/GPU',flush=True)
             
             batch_jacfwd = jit(shard_map(vmap(jacfwd(autodiff_jac),in_axes=(0,0,0)),
                                          mesh=mesh,
@@ -231,7 +257,7 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
                                          out_specs=PartitionSpec('i'),check_rep=False))
             
         elif len(jax.devices('gpu')) == 1:
-            print('autodiff over single GPU')
+            print('for runtype=benchmark: autodiff over single GPU',flush=True)
             batch_jacfwd = jit(vmap(jacfwd(autodiff_jac),in_axes=(0,0,0)))        
 
         ### return batch_solve, batch_jacfwd, jit(single_solve), and jit(jacfwd(single_solve))
@@ -239,7 +265,7 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
 
     
     else:
-        raise ValueError('runtype must be one of single, sampling or inference')    
+        raise ValueError('runtype must be one of single, sampling, inference, benchmark')    
 
 
     return batch_solve

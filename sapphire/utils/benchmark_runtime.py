@@ -1,5 +1,6 @@
 """
-this module provides convenience functions for generating mock parameters given prior bounds
+this module benchmarks runtime for solving and auto-diffing through ODEs
+for different numbers of halos/params and on CPU vs single GPU vs multi GPUs 
 """
 
 from astropy import constants as const
@@ -41,7 +42,7 @@ def start(config,batch_solve,halo_index,full_params_arr,free_params_arr):
 
     # for jacfwd, slice subset of full_params_arr to just be the free indices 
     # TO DO: generalize this and clean it up
-    inds_wanted = jnp.array([0,1,4,5,8,9,11,12,13])
+    inds_wanted = jnp.array([0,1,4,5,8,9,12,13])
     full_params_arr_wanted = full_params_arr[:,inds_wanted]
     
     ### set up a function that returns N shuffled combos of (params, halo_indices) 

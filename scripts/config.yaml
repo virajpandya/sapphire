@@ -23,7 +23,10 @@ model: 'pandya23'
 coolfunc: 'sd93'
 
 # must be 'single', 'sampling', 'inference', 'benchmark'
-runtype: 'benchmark'
+runtype: 'single'
+
+# if true, then returns both solution and jacobian of ODEs for runtype in ['single','sampling']
+return_sensitivity_jacobians: True
 
 ### moving these outside to prevent complicated nested dict merge 
 rng_sample: 1 # RNG key used for sampling 
@@ -171,7 +174,7 @@ obs_name: 'manga' # so far: manga, lit or mix
 # NOTE: perhaps write a script that automates generation (and/or submission of) disbatch task file
 # NOTE: perhaps add more customization options here for prefix, suffix, generic filename format, etc.
 output_path: '/mnt/ceph/users/vpandya/sapphire_outputs/'
-output_suffix: '4gpu' #'{flag_smhm}{flag_fgas}{flag_mzr_gas}_interpax' 
+output_suffix: '4gpu' #'{flag_smhm}{flag_fgas}{flag_mzr_gas}' 
 output_prefix: '' #'numpyro_{obs_name}_chain{chain_num}'
 
 # 
