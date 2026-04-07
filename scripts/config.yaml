@@ -26,7 +26,7 @@ coolfunc: 'sd93'
 runtype: 'single'
 
 # if true, then returns both solution and jacobian of ODEs for runtype in ['single','sampling']
-return_sensitivity_jacobians: True
+return_sensitivity_jacobians: False
 
 ### moving these outside to prevent complicated nested dict merge 
 rng_sample: 1 # RNG key used for sampling 
@@ -34,7 +34,7 @@ rng_init: 1 # rng key for samplers for reproducibility
 rng_halos: 3 # rng key for subsampling random halos 
 
 ### whether to run the initial solver again post-jit to benchmark runtime
-post_jit_benchmark: True
+post_jit_benchmark: False
 
 ### what redshifts to output posterior (or prior) predictives at -- can be a scalar or list of scalars
 # NOTE: most of the code is designed to only run with this as a z=0.0 scalar
@@ -89,7 +89,7 @@ sampling_config:
     posterior_file: 'numpyro_mix_chain%s_111_slope4_mzrgas.npz'
 
     # if on CPU or multi-GPU, MUST be equal to or an integer multiple of devices
-    Nsamples: 1000 
+    Nsamples: 100 
     
     # this simultaneously specifies which params are free and their bounds for Uniform sampling
     # NOTE: this could be made more general for non-Uniform priors

@@ -181,7 +181,7 @@ def summaries(constraint_results,constraint_labels,constraint_colors,constraint_
     xvals = np.arange(len(par_labels))
     
     ### TO DO: automate the figsize for different numbers of constraints/parameters
-    fig, axes = plt.subplots(nrows=2,ncols=2,figsize=(14,6),constrained_layout=True,dpi=120)
+    fig, axes = plt.subplots(nrows=4,ncols=1,figsize=(6,9),constrained_layout=True,dpi=120)
     
     allax = np.ravel(axes)
     
@@ -234,7 +234,7 @@ def summaries(constraint_results,constraint_labels,constraint_colors,constraint_
         ax.set_xlabel('Astrophysical Parameter',fontsize=12)
     
     ax_precision.axhline(1.0,color='k',lw=3,alpha=0.2,zorder=0,label='__none__')
-    ax_precision.legend(loc='upper left',fontsize=11,fancybox=True,framealpha=0,ncol=3,bbox_to_anchor=(0,1.03))
+    ax_precision.legend(loc='upper left',fontsize=11,fancybox=True,framealpha=0,ncol=3,bbox_to_anchor=(0.01,1.25))
     ax_precision.set_ylabel(r'$\mathcal{P}\;\left(\sigma_{\rm Fisher} / [1+|\theta_{\rm MAP}|] \right)$',fontsize=12)
     ax_precision.set_yscale('log')
     ax_precision.set_ylim(1e-3,5e1)
@@ -247,7 +247,7 @@ def summaries(constraint_results,constraint_labels,constraint_colors,constraint_
     ax_accuracy.axhline(0.0, color='k', ls='-', alpha=0.1, zorder=0, lw=3,label='__none__')
     ax_accuracy.axhspan(-1,1, facecolor='k', ls='-', alpha=0.1, zorder=0, lw=3,edgecolor='none',
                         label=r'$\pm1\sigma_{\rm Fisher}^{\rm true}$',)
-    ax_accuracy.legend(loc='upper center',fontsize=11,fancybox=True,framealpha=0,bbox_to_anchor=(0.5,1.01))
+    ax_accuracy.legend(loc='upper center',fontsize=11,fancybox=True,framealpha=0,bbox_to_anchor=(0.5,1.08))
     
     
     ### failure (saddle) rate
@@ -292,7 +292,7 @@ def summaries(constraint_results,constraint_labels,constraint_colors,constraint_
     ax_cond.text(0.1, 0.35,r'lower $\kappa_{\rm Fisher}$' + '\n' + r'$\Rightarrow$ weaker' + '\n' + r'degeneracies',
                  transform=ax_cond.transAxes,fontsize=11, color='gray', va='center')
     
-    ax_cond.text(0.99,0.8,'16-50-84 percentiles of\nthe condition number of Fisher matrices',
+    ax_cond.text(0.99,0.76,'16-50-84 percentiles of\nthe condition number of Fisher matrices',
                  transform=ax_cond.transAxes,fontsize=11,ha='right')
 
     if savefig is True:

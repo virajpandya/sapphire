@@ -316,7 +316,7 @@ def multicorner(output_path,basestr,config,figname=None,title=False,Nrand=100):
     
     flag_colors = {'100':'teal','110':'indigo','111':'orange'} # amber instead of orange looks nicer in chainconsumer
     # flag_labels = {'100':r'SMHM','110':r'SMHM+f$_{\rm gas}$','111':r'SMHM+f$_{\rm gas}$+MZR'}
-    flag_labels = {'100':r'SMHM','110':r'SMHM+f$_{\rm gas}$','111':r'SMHM+f$_{\rm gas}$+MZR'}
+    flag_labels = {'100':r'SMHM','110':r'SMHM+f$_{\rm ISM}$','111':r'SMHM+f$_{\rm ISM}$+MZR'}
     
     ### loop over each realization flag 
 
@@ -586,8 +586,12 @@ def posterior_predictive_checks(output_path,runs,
     
     for axnum,ax in enumerate(axes):
         leg = ax.legend(fontsize=8.5,fancybox=True,framealpha=1,ncol=leg_ncol,loc=leg_loc)
-        # if panels[axnum] in :
-            # leg.get_lines()[0].set_alpha(1.0)
+        try:
+            llines = leg.get_lines()
+            for ll in llines:
+                ll.set_alpha(1.0)
+        except:
+            pass
     
 
     ### if requested, save figure
