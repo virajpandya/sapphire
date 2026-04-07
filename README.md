@@ -1,7 +1,15 @@
 # sapphire
-sapphire is a framework for modeling the dynamical phase space evolution of galaxy populations. The code is written from scratch entirely in JAX (Bradbury et al. 2018) using the diffrax differential equation solver package (Kidger 2022), making it end-to-end differentiable and GPU-parallelized. It is designed to be modular, numerically robust and Bayesian. sapphire is the culmination of work led by Viraj Pandya during his PhD thesis ([Pandya et al. 2021](https://escholarship.org/uc/item/9xc1v7c9), comprising [Pandya et al. 2020](https://ui.adsabs.harvard.edu/abs/2020ApJ...905....4P/abstract) and [Pandya et al. 2021](https://ui.adsabs.harvard.edu/abs/2021MNRAS.508.2979P/abstract)) and NASA Hubble Prize Postdoctoral Fellowship ([Pandya et al. 2023](https://ui.adsabs.harvard.edu/abs/2023ApJ...956..118P/abstract), Pandya et al. 2026) with the goal of transforming galaxy formation into an interpretable precision science. 
+sapphire is a is a modular, automatically differentiable, multi-GPU-parallelized, open-source framework for evolving and understanding galaxy populations as dynamical systems. The code is written from scratch entirely in JAX (Bradbury et al. 2018) using the diffrax differential equation solver package (Kidger 2022). sapphire bridges astrophysics, cosmology, numerics, dynamics and statistics in new ways to enable:
+- sensitivity analysis for galaxy astrophysics with Jacobians
+- gradient descent with adam for efficient parameter optimization
+- fast, exact Fisher uncertainty forecasts
+- Bayesian inference with Hamiltonian Monte Carlo 
+- multi-GPU training set generation for implicit likelihood inference
+- interpretable emulation of cosmological simulations
+- hybrid physics-informed, data-driven galaxy formation modeling
+- ... and more coming soon
 
-Figure 1 from Pandya et al. (2026) provides a schematic overview of the interdisciplinary dynamical systems approach taken by sapphire to enable hybrid physics-informed, data-driven modeling of galaxy formation. 
+Figure 1 from Pandya et al. (2026) provides a schematic overview of the interdisciplinary dynamical systems approach to galaxy evolution taken by sapphire. 
 
 <img width="3200" height="1800" alt="pandya26_sapphire" src="https://github.com/user-attachments/assets/38b18df2-c097-4518-add2-f3493a2d948b" />
 
@@ -31,7 +39,7 @@ tar -xvzf /path/to/downloaded/sapphire/data/tarball/ -C /path/to/sapphire
 ```
 which will extract the required data files into the ```sapphire/data``` subdirectory (ideally the pip installation path). Alternatively, you can extract this tarball anywhere you want and then feed it as the runtime ```data_path``` argument (e.g., sapphire/scripts/config.yaml -- see below).
 
-We strongly recommend installing mamba from https://conda-forge.org/download/ to install a virtual environment with the necessary package dependencies listed in ```environment.yml```. You can automate the creation of a new mamba environment called "sapphire" by doing
+We strongly recommend installing mamba from https://conda-forge.org/download/ to create a virtual environment with the necessary package dependencies listed in ```environment.yml```. You can automate the creation of a new mamba environment called "sapphire" by doing
 
 ``` 
 CONDA_SUBDIR=osx-arm64 # this line is only if installing on MacOS
@@ -47,7 +55,7 @@ python -m ipykernel install --user --name yourenvname
 ```
 
 ### Installation with GPU support
-This is pretty much similar to above except the mamba environment you create must install jax and jaxlib with GPU-support. Currently sapphire is only tested on Nvidia GPUs -- best to follow the instructions on the Nvidia and JAX website for installing the relevant CUDA drivers beforehand. Afterwards, in principle it's as simple as: 
+This is pretty much similar to above except the mamba environment you create must install jax and jaxlib with GPU-support. Currently sapphire is only tested on Nvidia GPUs -- best to follow the instructions on the Nvidia website for installing the relevant GPU drivers beforehand. Afterwards, in principle it's as simple as: 
 
 ```
 mamba create -n yourenvname python=3.12 
@@ -59,9 +67,11 @@ pip install --upgrade "jax[cuda12]" # or [cuda13] depending on what Nvidia drive
 We recommend installing a single environment with GPU support since that automatically comes with CPU support (if/when no GPUs are auto-detected by JAX).
 
 ## Quick example
-Go to https://binder.flatironinstitute.org/, enter "vpandya" for host user and "sapphire" for project name. This will automatically create an environment with the required python packages, so you only need to clone/upload and follow the pip installation instructions for sapphire and its data tarball.
+Note: We are working on adding Colab and non-Flatiron Binder options. For Flatiron Binder access, send Viraj Pandya (vgp2108@columbia.edu) your email address.
 
-Then try running ```sapphire/demo/prior_predictive_checks.ipynb```. You will need to modify the paths in that ipynb and in ```sapphire/scripts/config.yaml``` to start with ```/home/jovyan/```
+Go to https://binder.flatironinstitute.org/, enter "vpandya" for host user and "sapphire" for project name. This will automatically create an environment with the required python packages, so you only need to clone/upload and follow the pip installation instructions for sapphire and its data tarball. Note that there is a limit of 16 CPU cores and 256GB memory which may not be enough for many sapphire applications. 
+
+Then try running ```sapphire/demo/pandya26/prior_predictive_checks.ipynb``` or any of the other notebooks to reproduce figures from Pandya+26. You will need to modify the paths in that ipynb and in ```sapphire/scripts/config.yaml``` to start with ```/home/jovyan/```. 
 
 ## Documentation
 Link to GitHub Wiki or MkDocs/ReadTheDocs forthcoming
