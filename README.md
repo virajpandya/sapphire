@@ -23,21 +23,27 @@ Figure 1 from [Pandya et al. (2023)](https://ui.adsabs.harvard.edu/abs/2023ApJ..
 
 ### pip install [CPU-only]
 
-Until we put sapphire on PyPI, download/clone the sapphire repo and do
-
+sapphire is on PyPI so you could do
 ```
 mamba activate yourenvname [highly recommended, see below]
-cd /path/to/sapphire/download
-pip install . 
+pip install --upgrade sapphire-jax
 ```
-This will put sapphire in your python path, so you can do ```import sapphire``` from anywhere. 
+
+However, since sapphire is under active development, we instead recommend cloning the latest git repo:
+```
+mamba activate yourenvname [highly recommended, see below]
+git clone https://github.com/virajpandya/sapphire.git
+cd /path/to/sapphire/download
+pip install -e .
+```
+This will put the sapphire directory in your python path, so you can do ```import sapphire``` from anywhere. 
 
 Then, download the latest corresponding data tarball from GitHub Releases and do something like
 
 ```
 tar -xvzf /path/to/downloaded/sapphire/data/tarball/ -C /path/to/sapphire
 ```
-which will extract the required data files into the ```sapphire/data``` subdirectory (ideally the pip installation path). Alternatively, you can extract this tarball anywhere you want and then feed it as the runtime ```data_path``` argument (e.g., sapphire/scripts/config.yaml -- see below).
+which will extract the required data files into the ```sapphire/data``` subdirectory (ideally the pip installation path). Alternatively, you can extract this tarball anywhere you want and then feed it as the ```data_path``` argument in the config.yaml file and/or as a command-line argument (see below).
 
 We strongly recommend installing mamba from https://conda-forge.org/download/ to create a virtual environment with the necessary package dependencies listed in ```environment.yml```. You can automate the creation of a new mamba environment called "sapphire" by doing
 
