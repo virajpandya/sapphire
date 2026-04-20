@@ -44,7 +44,7 @@ def setup(config,loss_func,grad_loss_func):
     Nfree = len(params_free)
     
     ### generate initial guess
-    base_key = jax.random.key(config['rng_init'])
+    base_key = jax.random.key(int(config['rng_init']))
     init_keys = jax.random.split(base_key, len(list(params_bounds.keys()))) 
     
     # generate init param dict

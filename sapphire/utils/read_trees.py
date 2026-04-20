@@ -181,7 +181,7 @@ def get(config):
     
     # then choose random subset of these
     # NOTE: user should take care to compare their Nbatch to the total # of trees -- as Nbatch-->Ntot, get HMF/poisson sampling effects
-    inds_rand = jax.random.choice(key(config['rng_halos']),jnp.arange(len(filt_halo_matrix)),
+    inds_rand = jax.random.choice(key(int(config['rng_halos'])),jnp.arange(len(filt_halo_matrix)),
                                   shape=(config['Nbatch'],),replace=False,p=1/draw_probs)
     
     # finally rand_matrix

@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sapphire-jax"
-version = "0.133"
+version = "0.121"
 authors = [
   { name="Viraj Pandya", email="viraj.pandya@gmail.com" },
 ]
-description = "JAX-based simulator of galaxy population evolution"
+description = "JAX-based galaxy population simulator"
 readme = "README.md"
 requires-python = ">=3.12"
 classifiers = [
@@ -30,3 +30,5 @@ Issues = "https://github.com/virajpandya/sapphire/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["sapphire*"]
+
+

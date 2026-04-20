@@ -12,7 +12,7 @@ data_path: '/mnt/ceph/users/vpandya/sapphire/data/'
 tree_type: 'tng'
 
 # number halos per iteration; if on CPU or multi-GPU, must be integer multiple of devices
-Nbatch: 1000
+Nbatch: 10000
 
 # which physical model (diffeq system and parameterizations) to use
 # NOTE: this will be further modularized later 
@@ -46,6 +46,7 @@ solver_config:
     engine: 'diffrax'
     rtol: 1.0e-8
     atol: 1.0e-8
+    max_steps: 65536 # must be integer power of 16
 
 ### baseline parameters for physical model
 # some of these may be overridden by sampling_config below, if inference or random mock requested

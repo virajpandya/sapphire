@@ -74,7 +74,7 @@ def single_random(config):
     params_free = list(params_bounds.keys())
 
     # first generate single random set of free parameter values (non-transformed)
-    base_key = jax.random.key(config['rng_sample'])
+    base_key = jax.random.key(int(config['rng_sample']))
     keys = jax.random.split(base_key, len(params_free))
     free_params_dict = {pname: jax.random.uniform(keys[i], shape=(), minval=plow, maxval=phigh)
                         for i, (pname, (plow, phigh)) in enumerate(params_bounds.items())}    
@@ -132,7 +132,7 @@ def latin_hypercube_sampling(config):
     print('upper_bounds',upper_bounds,flush=True)
     
     # first create a base random key based on mock_num, then split into as many different keys as free parameters we want
-    base_key = jax.random.key(config['rng_sample'])
+    base_key = jax.random.key(int(config['rng_sample']))
     keys = jax.random.split(base_key, len(params_free))
 
     Nsamples = sampling_config['Nsamples'] 

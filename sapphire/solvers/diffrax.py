@@ -53,7 +53,8 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
     t1 = logt_final 
     dt0 = 1e-10 # April 2024 -- this cannot be None otherwise Tsit5() cannot find dt0 even if max_steps=16**6 (it solves in only ~500 steps vs 10K for Bosh3)
     solver = Tsit5(scan_kind='bounded') #Dopri5() #Tsit5() #Bosh3() 
-    max_steps = 16**4 # if this is None, reverse-mode checkpointed adjoint (autodiff) cannot be done; typically we only need ~3K steps for our tolerance choice
+    # if this is None, reverse-mode checkpointed adjoint (autodiff) cannot be done; typically we only need ~3K steps for our tolerance choice
+    max_steps = config['solver_config']['max_steps']
     
     ### set up output times at which to return solution
     
