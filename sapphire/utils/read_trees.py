@@ -6,7 +6,7 @@ by the sapphire/read_trees/jaxify_trees.py
 
 from astropy import constants as const
 from astropy import units as u
-from astropy.cosmology import Planck15 
+from astropy.cosmology import Planck15, FlatLambdaCDM 
 from functools import partial 
 from timeit import default_timer as timer
 import os
@@ -38,13 +38,16 @@ def get(config):
     list_ts_full = [] # just to verify they're all same 
     
     tstart0 = timer()
-    
-    # Nbatches = 6 for TNG50, 5 for TNG100, 7 for TNG300 -- can also glob
-    for ibatch in range(5):
+
+    # Nbatches = 1 for cdhmah, 6 for TNG50, 5 for TNG100, 7 for TNG300
+    for ibatch in range(config['tree_batches']):
         tstart = timer()
-        # *absolute* path to directory containing jaxified tree files 
-        # NOTE: should generalize this for different tree_name subdirs using '%s' wildcard as in visualization module
-        tree_path = os.path.join(config['data_path'],'trees/%s/tng100_subvolumes%s_jax.npz'%(config['tree_type'],ibatch)) 
+        if config['tree_type'] in ['tng']:
+            tree_file = config['tree_filename']%ibatch
+        else: # cdhmah
+            tree_file = config['tree_filename']
+        tree_path = os.path.join(config['data_path'],'trees/%s/%s'%(config['tree_type'],tree_file)) 
+        # tree_path = os.path.join(config['data_path'],'trees/%s/tng100_subvolumes%s_jax.npz'%(config['tree_type'],tree_file)) 
         npz = jnp.load(tree_path,allow_pickle=True)
         
         list_halo_tinit.append(npz['halo_tinit'])
@@ -73,7 +76,7 @@ def get(config):
     for i in range(len(list_halo_tinit)):
         this_sum = len(list_halo_tinit[i])
         tot_sum += this_sum
-        print(i,this_sum,flush=True)
+        print('batch=%s has %s halos'%(i,this_sum),flush=True)
 
     print('total # trees',tot_sum,flush=True)
 
@@ -117,23 +120,6 @@ def get(config):
         
         # this here will return Cubic Hermite coeff matrix for a single halo (single row of halo_matrix)
         return interp_single(halo_matrix)
-    
-    
-    @jit
-    @partial(vmap,in_axes=(0,None,None))
-    def assign_probs(filt_halo_matrix,full_filt_halo_matrix,sigma):
-        """
-        filt_halo_matrix input twice since vmap will be over first axis, 
-        but we'll want to filter the rest of the matrix to compute # halos
-        with z=0 logmvir within +/- sigma dex of each halo for probability
-        
-        return value should be of shape (Nhalos,) where each entry is # halos with similar mass
-        """
-        
-        # three-arg version of jnp.where: return 1 if condition true to count that halo, 0 otherwise
-        # then we sum over to count # of halos
-        
-        return jnp.sum(jnp.where((full_filt_halo_matrix[:,1,-1]>filt_halo_matrix[1,-1]-sigma) & (full_filt_halo_matrix[:,1,-1]<filt_halo_matrix[1,-1]+sigma),1,0))
         
     
     # compute cubic hermite interp coeffs 
@@ -150,7 +136,8 @@ def get(config):
     ### suppose instead I just wanted a random subset of all halos with z=0 logmvir~10-12
     
     # first filter to mass range
-    inds_filt = jnp.where((halo_matrix[:,1,-1]>10) & (halo_matrix[:,1,-1]<12.3))[0]
+    # inds_filt = jnp.where((halo_matrix[:,1,-1]>10) & (halo_matrix[:,1,-1]<12.3))[0]
+    inds_filt = jnp.where((halo_matrix[:,1,-1]>9.9) & (halo_matrix[:,1,-1]<12.6))[0]
     filt_halo_matrix = halo_matrix[inds_filt]
     filt_coeff_matrix = coeff_matrix[inds_filt]
     filt_halo_tinit = halo_tinit[inds_filt]
@@ -162,6 +149,22 @@ def get(config):
     # the probability should be lower for lower-mass halos
     # i.e., probability of drawing each halo should be inversely proportional to # of halos with similar mass
 
+    @jit
+    @partial(vmap,in_axes=(0,None,None))
+    def assign_probs(filt_halo_matrix,full_filt_halo_matrix,sigma):
+        """
+        filt_halo_matrix input twice since vmap will be over first axis, 
+        but we'll want to filter the rest of the matrix to compute # halos
+        with z=0 logmvir within +/- sigma dex of each halo for probability
+        
+        return value should be of shape (Nhalos,) where each entry is # halos with similar mass
+        """
+        
+        # three-arg version of jnp.where: return 1 if condition true to count that halo, 0 otherwise
+        # then we sum over to count # of halos
+        
+        return jnp.sum(jnp.where((full_filt_halo_matrix[:,1,-1]>filt_halo_matrix[1,-1]-sigma) & (full_filt_halo_matrix[:,1,-1]<filt_halo_matrix[1,-1]+sigma),1,0))
+    
     # initial compile
     tstart = timer()    
     draw_probs = assign_probs(filt_halo_matrix,filt_halo_matrix,0.05)
@@ -181,8 +184,14 @@ def get(config):
     
     # then choose random subset of these
     # NOTE: user should take care to compare their Nbatch to the total # of trees -- as Nbatch-->Ntot, get HMF/poisson sampling effects
-    inds_rand = jax.random.choice(key(int(config['rng_halos'])),jnp.arange(len(filt_halo_matrix)),
-                                  shape=(config['Nbatch'],),replace=False,p=1/draw_probs)
+    if config['Nbatch'] <= len(filt_halo_matrix):
+        inds_rand = jax.random.choice(key(int(config['rng_halos'])),jnp.arange(len(filt_halo_matrix)),
+                                      shape=(config['Nbatch'],),replace=False,p=1/draw_probs)
+    else: # use only trees available
+        print('requested Nbatch [%s] > trees available [%s], using all %s'%(config['Nbatch'],len(filt_halo_matrix),len(filt_halo_matrix)),
+              flush=True)
+        inds_rand = jnp.arange(len(filt_halo_matrix))
+    
     
     # finally rand_matrix
     rand_halo_matrix = filt_halo_matrix[inds_rand]
@@ -191,6 +200,7 @@ def get(config):
     print('rand_coeff_matrix.shape',rand_coeff_matrix.shape,flush=True)
 
     rand_halo_index = jnp.arange(len(rand_halo_tinit))
+    print('rand_halo_index.shape',rand_halo_index.shape)
 
 
     # return the downsampled matrices
