@@ -1,5 +1,5 @@
 # sapphire
-sapphire is a is a modular, automatically differentiable, multi-GPU-parallelized, open-source framework for evolving and understanding galaxy populations as dynamical systems. The code is written from scratch entirely in JAX (Bradbury et al. 2018) using the diffrax differential equation solver package (Kidger 2022). sapphire bridges astrophysics, cosmology, numerics, dynamics and statistics in new ways to enable:
+sapphire is a modular, automatically differentiable, multi-GPU-parallelized, open-source framework for evolving and understanding galaxy populations as dynamical systems. The code is written from scratch entirely in JAX (Bradbury et al. 2018) using the diffrax differential equation solver package (Kidger 2022). sapphire bridges astrophysics, cosmology, numerics, dynamics and statistics in new ways to enable:
 - sensitivity analysis for galaxy astrophysics with Jacobians
 - gradient descent with adam for efficient parameter optimization
 - fast, exact Fisher uncertainty forecasts
@@ -9,7 +9,7 @@ sapphire is a is a modular, automatically differentiable, multi-GPU-parallelized
 - hybrid physics-informed, data-driven galaxy formation modeling
 - ... and more coming soon
 
-Figure 1 from Pandya et al. (2026) provides a schematic overview of the interdisciplinary dynamical systems approach to galaxy evolution taken by sapphire. 
+Figure 1 from [Pandya et al. (2026)](https://ui.adsabs.harvard.edu/abs/2026arXiv260406318P/abstract) provides a schematic overview of the interdisciplinary dynamical systems approach to galaxy evolution taken by sapphire. 
 
 <img width="3200" height="1800" alt="pandya26_sapphire" src="https://github.com/user-attachments/assets/38b18df2-c097-4518-add2-f3493a2d948b" />
 
@@ -77,7 +77,7 @@ Note: We are working on adding Colab and non-Flatiron Binder options. For Flatir
 
 Go to https://binder.flatironinstitute.org/, enter "vpandya" for host user and "sapphire" for project name. This will automatically create an environment with the required python packages, so you only need to clone/upload and follow the pip installation instructions for sapphire and its data tarball. Note that there is a limit of 16 CPU cores and 256GB memory which may not be enough for many sapphire applications. 
 
-Then try running ```sapphire/demo/pandya26/prior_predictive_checks.ipynb``` or any of the other notebooks to reproduce figures from Pandya+26. You will need to modify the paths in that ipynb and in ```sapphire/scripts/config.yaml``` to start with ```/home/jovyan/```. 
+Then try running ```sapphire/demo/pandya26/prior_predictive_checks.ipynb``` or any of the other notebooks to reproduce figures from [Pandya+26](https://ui.adsabs.harvard.edu/abs/2026arXiv260406318P/abstract). You will need to modify the paths in that ipynb and in ```sapphire/scripts/config.yaml``` to start with ```/home/jovyan/```. 
 
 ## Documentation
 Link to GitHub Wiki or MkDocs/ReadTheDocs forthcoming
@@ -94,9 +94,25 @@ If you did not use the code or outputs as-is but found the approach useful, we a
 
 ```
 <<<<<<<<<<
-- add Pandya+26 when submitted
 - expand this to include subsequent papers by other sapphire developers
 >>>>>>>>>>
+
+@ARTICLE{pandy26,
+       author = {{Pandya}, Viraj and {Bryan}, Greg L. and {Makinen}, T. Lucas and {Gabrielpillai}, Austen and {Carr}, Christopher and {Fielding}, Drummond B. and {Hernquist}, Lars and {Ho}, Matthew and {Iyer}, Kartheik and {Jespersen}, Christian Kragh and {Koudmani}, Sophie and {Laska}, Marta and {Lemos}, Pablo and {Lovell}, Christopher C. and {Perez}, Lucia A. and {Robinson}, Jr., William F. and {Somerville}, Rachel S. and {Starkenburg}, Tjitske K. and {Stiskalek}, Richard and {Terrazas}, Bryan and {Voit}, G. Mark},
+        title = "{Introducing sapphire: Towards Hybrid Physics-Informed, Data-Driven Modeling of Galaxy Formation}",
+      journal = {arXiv e-prints},
+     keywords = {Astrophysics of Galaxies},
+         year = 2026,
+        month = apr,
+          eid = {arXiv:2604.06318},
+        pages = {arXiv:2604.06318},
+          doi = {10.48550/arXiv.2604.06318},
+archivePrefix = {arXiv},
+       eprint = {2604.06318},
+ primaryClass = {astro-ph.GA},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2026arXiv260406318P},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
 
 @ARTICLE{pandya23,
        author = {{Pandya}, Viraj and {Fielding}, Drummond B. and {Bryan}, Greg L. and {Carr}, Christopher and {Somerville}, Rachel S. and {Stern}, Jonathan and {Faucher-Gigu{\`e}re}, Claude-Andr{\'e} and {Hafen}, Zachary and {Angl{\'e}s-Alc{\'a}zar}, Daniel and {Forbes}, John C.},
