@@ -13,7 +13,7 @@ NOTE:   In the future I plan to move the ODE solver / numerics stuff to another 
 
 from astropy import constants as const
 from astropy import units as u
-from astropy.cosmology import Planck15, FlatLambdaCDM 
+from astropy.cosmology import Planck15 
 from functools import partial 
 
 # in case user loads module separately from sapphire.run()
@@ -52,8 +52,6 @@ def setup(config):
     yZ = params_fixed_astro['yZ'] # metal yield of 1 SN per 100 Msun of stars formed (2 Msun / 100 Msun = 0.02 for 10 Msun of SN ejecta) 
     A_Zin_halo = params_fixed_astro['A_Zin_halo'] # pre-enrichment metallicity that multiplies Mdot_in_halo, default 0.25 from Pandya+23 
 
-    # April 2026 -- cosmo params are inputs now for Robinson+26 
-    params_cosmo = config['params_cosmo'] 
     
     ### define constants and conversions 
     const_mp = const.m_p.to('Msun').value 
@@ -63,22 +61,18 @@ def setup(config):
     yr_to_s = u.yr.to('s') # if you multiply something in yr by this, you get it in units of sec
     s_to_yr = u.s.to('yr')
     Msun_to_g = u.Msun.to('g') 
-    f_b = params_cosmo['Ob0'] / params_cosmo['Om0'] # ~15% for Planck15
-    littleh = params_cosmo['h0']
-    Om0 = params_cosmo['Om0']
+    f_b = Planck15.Ob0 / Planck15.Om0 # ~15 %
+    littleh = Planck15.h
+    Om0 = Planck15.Om0
     G = const.G.to('cm**3 / (g * s**2)').value
-
-    cosmo = FlatLambdaCDM(H0=littleh*100, Om0=Om0, Tcmb0=params_cosmo['Tcmb0'], 
-                          Ob0=params_cosmo['Ob0'], Neff=params_cosmo['Neff'])
-    
-    t0 = cosmo.age(0).value 
+    t0 = Planck15.age(0).value 
     
     ### jax-cosmo does not have rho_crit(z) so for now just interpolate (later can implement)
     # interpolate cosmology functions since its easier than analytic ones for now
     zarr = jnp.linspace(10.0,0.0,100)
-    tarr = cosmo.age(zarr).value # Gyr
-    rhocrit_arr = jnp.asarray(cosmo.critical_density(zarr).value)
-    Om_arr = jnp.asarray(cosmo.Om(zarr))
+    tarr = Planck15.age(zarr).value # Gyr
+    rhocrit_arr = jnp.asarray(Planck15.critical_density(zarr).value)
+    Om_arr = jnp.asarray(Planck15.Om(zarr))
     
     # interp_rhocrit_z = jit(InterpolatedUnivariateSpline(jnp.asarray(zarr),rhocrit_arr,k=3))
     # interp_Om_z = jit(InterpolatedUnivariateSpline(jnp.asarray(zarr),Om_arr,k=3))

@@ -5,7 +5,7 @@ and evolves the ODEs
 
 from astropy import constants as const
 from astropy import units as u
-from astropy.cosmology import Planck15, FlatLambdaCDM 
+from astropy.cosmology import Planck15
 from functools import partial 
 
 # in case user loads module separately from sapphire.run()
@@ -38,23 +38,14 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
     yr_to_s = u.yr.to('s') # if you multiply something in yr by this, you get it in units of sec
     s_to_yr = u.s.to('yr')
     Msun_to_g = u.Msun.to('g') 
-
-    # April 2026 -- cosmo params are inputs now for Robinson+26 
-    params_cosmo = config['params_cosmo'] 
-
-    f_b = params_cosmo['Ob0'] / params_cosmo['Om0'] # ~15% for Planck15
-    littleh = params_cosmo['h0']
-    Om0 = params_cosmo['Om0']
+    f_b = Planck15.Ob0 / Planck15.Om0 # ~15 %
+    littleh = Planck15.h
+    Om0 = Planck15.Om0
     G = const.G.to('cm**3 / (g * s**2)').value
-
-    cosmo = FlatLambdaCDM(H0=littleh*100, Om0=Om0, Tcmb0=params_cosmo['Tcmb0'], 
-                          Ob0=params_cosmo['Ob0'], Neff=params_cosmo['Neff'])
-    
-    G = const.G.to('cm**3 / (g * s**2)').value
-    t0 = cosmo.age(0).value 
+    t0 = Planck15.age(0).value 
     
     ### set up global final integration time in log(t/sec) corresponding to z=0
-    logt_final = jnp.log10(cosmo.age(0.0).value * 1e9 * yr_to_s)
+    logt_final = jnp.log10(Planck15.age(0.0).value * 1e9 * yr_to_s)
     
     ### set up inputs for diffrax ODE solver
     
@@ -73,7 +64,7 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
     else: 
         # t_eval = jnp.log10(yr_to_s*1e9*jnp.asarray(Planck15.age(jnp.arange(0.0,3.5,0.5)).value)[::-1])
         # assume user input redshift array in monotonically increasing order, but ages then become decreasing, need [::-1] to reverse for diffrax
-        t_eval = jnp.log10(yr_to_s*1e9*jnp.asarray(cosmo.age(jnp.asarray(config['output_redshifts'])).value)[::-1]) 
+        t_eval = jnp.log10(yr_to_s*1e9*jnp.asarray(Planck15.age(jnp.asarray(config['output_redshifts'])).value)[::-1]) 
         saveat = SaveAt(ts=t_eval,fn=saveat_fn)
         
         # t_eval = jnp.linspace(logt_init,logt_final,100)

@@ -9,27 +9,10 @@ data_path: '/mnt/ceph/users/vpandya/sapphire/data/'
 
 # which sapphire/data/trees/ subdirectory to use (see sapphire/trees/jax_read_trees.py)
 # NOTE: will try to enforce metadata in jaxified-sapphire tree format, so we can eventually remove this 
-tree_type: 'cdhmah' 
-tree_filename: 'rewrite_cdhmah_Planck18.npz' 
-tree_batches: 1 
-# tree_type: 'tng' # tng, cdhmah
-# tree_filename: 'tng100_subvolumes%s_jax.npz' # tng100_subvolumes%s_jax.npz, rewrite_cdhmah_{cosmo}.npz
-# tree_batches: 5 # 1 for cdhmah, 6 for TNG50, 5 for TNG100, 7 for TNG300
+tree_type: 'tng'
 
 # number halos per iteration; if on CPU or multi-GPU, must be integer multiple of devices
-# these are subsampled from 
-Nbatch: 1000
-
-# cosmological parameters (default=Planck15) 
-params_cosmo: 
-    Om0: 0.3075 # colossus and Planck+15 paper are 0.0389, but see astropy: https://github.com/astropy/astropy/issues/16674 
-    Ode0: 0.6910
-    Ob0: 0.0486
-    h0: 0.6774
-    sigma8: 0.8159
-    Tcmb0: 2.7255
-    Neff: 3.0460
-    ns: 0.9667
+Nbatch: 10000
 
 # which physical model (diffeq system and parameterizations) to use
 # NOTE: this will be further modularized later 
