@@ -47,7 +47,7 @@ def get(config):
         else: # cdhmah
             tree_file = config['tree_filename']
         tree_path = os.path.join(config['data_path'],'trees/%s/%s'%(config['tree_type'],tree_file)) 
-        # tree_path = os.path.join(config['data_path'],'trees/%s/tng100_subvolumes%s_jax.npz'%(config['tree_type'],tree_file)) 
+
         npz = jnp.load(tree_path,allow_pickle=True)
         
         list_halo_tinit.append(npz['halo_tinit'])
