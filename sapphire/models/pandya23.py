@@ -2,7 +2,7 @@
 This module defines the ODE RHS function, initial conditions, and other associated specialized functions for the 
 general purely thermal model that Viraj adapted for JAX. 
 
-This also includes the ODE solver call including my early 2023 updates to logarithmic ODE solver. 
+This also includes the ODE solver call including my early 2023 updates to logarithmic ODE solver.
 
 NOTE:   In the future I plan to move the ODE solver / numerics stuff to another module, and this module should just define
         a generic integrator function and initial condition function and any other associated specialized functions for this particular physical model.

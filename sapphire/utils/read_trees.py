@@ -1,6 +1,6 @@
 """
-This modules reads in an npz file of TNG trees that were compactified and written 
-by the sapphire/read_trees/jaxify_trees.py 
+This modules reads in an npz file of TNG trees that were compactified and written
+by the sapphire/read_trees/jaxify_trees.py
 
 """
 

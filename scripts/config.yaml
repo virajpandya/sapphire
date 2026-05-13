@@ -8,7 +8,7 @@ num_cpus: 50
 data_path: '/mnt/ceph/users/vpandya/sapphire/data/'
 
 # which sapphire/data/trees/ subdirectory to use (see sapphire/trees/jax_read_trees.py)
-# NOTE: will try to enforce metadata in jaxified-sapphire tree format, so we can eventually remove this 
+# NOTE: will try to enforce metadata in jaxified-sapphire tree format, so we can eventually remove this
 tree_type: 'tng'
 
 # number halos per iteration; if on CPU or multi-GPU, must be integer multiple of devices
@@ -178,4 +178,4 @@ output_path: '/mnt/ceph/users/vpandya/sapphire_outputs/'
 output_suffix: '4gpu' #'{flag_smhm}{flag_fgas}{flag_mzr_gas}' 
 output_prefix: '' #'numpyro_{obs_name}_chain{chain_num}'
 
-# 
+#

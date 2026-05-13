@@ -9,7 +9,7 @@ from functools import partial
 
 # in case user loads module separately from sapphire.run()
 from jax import config as jax_config
-jax_config.update("jax_enable_x64", True) # required to accurately solve and take gradients through our diffeqs 
+jax_config.update("jax_enable_x64", True) # required to accurately solve and take gradients through our diffeqs
 
 import jax
 import jax.numpy as jnp
@@ -29,7 +29,7 @@ from jax.sharding import Mesh, PartitionSpec, NamedSharding
 import pandas as pd
 import os
 
-# user requested only a single run, so just transform their input dict into jnp.array format with 10**A_X, etc. 
+# user requested only a single run, so just transform their input dict into jnp.array format with 10**A_X, etc.
 def single_fixed(config):
 
     # first get just the free parameters non-transformed (as would be input into adam, NUTS, etc.)
