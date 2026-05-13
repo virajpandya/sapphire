@@ -201,9 +201,14 @@ def posterior_samples(config):
     samples_df = pd.concat(chains_nuts.values(), ignore_index=True)
     
     # get Nsamples random draws from posterior 
-    # must be integer multuple of num_cpus or num_gpus 
-    Nsamples = sampling_config['Nsamples'] 
-    rand_samples_df = samples_df.sample(Nsamples,random_state=1) 
+    # must be integer multuple of num_cpus or num_gpus
+    if config['runtype'] == 'sampling':
+        Nsamples = sampling_config['Nsamples'] 
+    elif config['runtype'] == 'single':
+        Nsamples = 1
+    else:
+        raise ValueError('for posterior sampling, runtype must be sampling or single')
+    rand_samples_df = samples_df.sample(Nsamples,random_state=int(config['rng_sample'])) 
     rand_samples_dict = rand_samples_df.to_dict(orient='list') 
     
     # convert input params_fixed so every element is a jax array for later below 
@@ -231,11 +236,17 @@ def posterior_samples(config):
     full_params_arr = full_params_arr.at[:,8].set(10**full_params_arr[:,8]) # A_SF 
     full_params_arr = full_params_arr.at[:,12].set(10**full_params_arr[:,12]) # A_Z 
     
-    # print('params_lharr\n',params_lharr,flush=True)
-    print('full_params_arr.shape\n',full_params_arr.shape,flush=True)
-    
     ### convert params_lhs to arr for other processing 
-    free_params_arr = arr = jnp.column_stack([jnp.asarray(rand_samples_dict[k]) for k in params_free])
+    free_params_arr = jnp.column_stack([jnp.asarray(rand_samples_dict[k]) for k in params_free])
+
+    ### April '26: for single posterior sample, squeeze out the leading dimension
+    if config['runtype'] == 'single':
+        full_params_arr = jnp.squeeze(full_params_arr)
+        free_params_arr = jnp.squeeze(free_params_arr)
+
+    # print('params_lharr\n',params_lharr,flush=True)
+    print('full_params_arr.shape\n',full_params_arr.shape,flush=True)    
+    print('free_params_arr.shape\n',free_params_arr.shape,flush=True)    
     
     # (full_params array, free non-transformed params arr)
     return full_params_arr, free_params_arr
@@ -251,8 +262,9 @@ def get(config):
     sampling_config = config['sampling_config']
     inference_config = config['inference_config'] 
 
-    # both single and inference runtypes only evaluate a single parameter set at a time 
-    if config['runtype'] == 'single' or (config['runtype']=='inference' and inference_config['random_mock']==False):
+    ### clean this up ... 
+    
+    if (config['runtype'] == 'single' and sampling_config['method']!='posterior') or (config['runtype']=='inference' and inference_config['random_mock']==False):
         return single_fixed(config)
     
     elif config['runtype'] == 'inference' and inference_config['random_mock']==True:
@@ -261,7 +273,7 @@ def get(config):
     elif config['runtype'] in ['sampling','benchmark'] and sampling_config['method'] == 'latin_hypercube': 
         return latin_hypercube_sampling(config)
 
-    elif config['runtype'] == 'sampling' and sampling_config['method'] == 'posterior':
+    elif config['runtype'] in ['single','sampling'] and sampling_config['method'] == 'posterior':
         return posterior_samples(config)
 
     else:
