@@ -79,7 +79,7 @@ def get(config):
 
     ### merge all lists along leading Nhalos axis into jax jnp.arrays
     
-    halo_tinit = jnp.concatenate(list_halo_tinit)
+    halo_tinit  = jnp.concatenate(list_halo_tinit)
     halo_matrix = jnp.concatenate(list_halo_matrix)
     halo_rootid = jnp.concatenate(list_halo_rootid)
     # halo_subvolume = np.concatenate(list_halo_subvolume) # needs to be normal np.array since its strings
