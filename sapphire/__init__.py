@@ -36,15 +36,28 @@ plt.rcParams['xtick.top'] = True
 from sapphire.utils import read_config
 
 # NOTE: this should be further modularized as needed, including any dependency injections (loading of modules based on config dict)
-def run(config):
+def run(config,custom_solver_inputs=None):
     """
     driver module that calls all the other submodules in the required order.
     
     config: user-provided dict possibly with .yaml baseline config file 
+
+    custom_solver_inputs = (integrator,init_state,init_time,parameters,forcings,
+                            final_time,dt0,rtol,atol,max_steps,compute_Jacobians) 
+                            
+    if custom_solver_inputs is not None, then everything is handled by sapphire/solvers/explicit_rk23.py
+    otherwise sapphire is run according to the input config 
     
     NOTE: at some point I plan to offload a lot of the if/else checks on the config dict to another module 
     """
 
+    if custom_solver_inputs is not None:
+        print('sending custom_solver_inputs to sapphire/solvers/explicit_rk23.py',flush=True)
+
+        from sapphire.solvers import explicit_rk23
+        return explicit_rk23.setup(*custom_solver_inputs) 
+        
+    
     # just to benchmark entire runtime from start to finish
     tstart0 = timer()
 
