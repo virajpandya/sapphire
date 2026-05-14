@@ -1,5 +1,7 @@
 # sapphire
-sapphire is a modular, automatically differentiable, multi-GPU-parallelized, open-source framework for evolving and understanding galaxy populations as dynamical systems. The code is written from scratch entirely in JAX (Bradbury et al. 2018) using the diffrax differential equation solver package (Kidger 2022). sapphire bridges astrophysics, cosmology, numerics, dynamics and statistics in new ways to enable:
+sapphire is a modular, automatically differentiable, multi-GPU-parallelized, open-source framework for evolving and understanding galaxy populations as dynamical systems. The code is written from scratch entirely in [JAX](https://github.com/jax-ml/jax) with a custom-built minimalist adaptive RK23 solver for pedagogical purposes. For production-level science, we currently use [diffrax](https://github.com/patrick-kidger/diffrax).
+
+sapphire bridges astrophysics, cosmology, numerics, dynamics and statistics in new ways to enable:
 - sensitivity analysis for galaxy astrophysics with Jacobians
 - gradient descent with adam for efficient parameter optimization
 - fast, exact Fisher uncertainty forecasts
@@ -97,7 +99,7 @@ If you did not use the code or outputs as-is but found the approach useful, we a
 - expand this to include subsequent papers by other sapphire developers
 >>>>>>>>>>
 
-@ARTICLE{pandy26,
+@ARTICLE{pandya26,
        author = {{Pandya}, Viraj and {Bryan}, Greg L. and {Makinen}, T. Lucas and {Gabrielpillai}, Austen and {Carr}, Christopher and {Fielding}, Drummond B. and {Hernquist}, Lars and {Ho}, Matthew and {Iyer}, Kartheik and {Jespersen}, Christian Kragh and {Koudmani}, Sophie and {Laska}, Marta and {Lemos}, Pablo and {Lovell}, Christopher C. and {Perez}, Lucia A. and {Robinson}, Jr., William F. and {Somerville}, Rachel S. and {Starkenburg}, Tjitske K. and {Stiskalek}, Richard and {Terrazas}, Bryan and {Voit}, G. Mark},
         title = "{Introducing sapphire: Towards Hybrid Physics-Informed, Data-Driven Modeling of Galaxy Formation}",
       journal = {arXiv e-prints},
