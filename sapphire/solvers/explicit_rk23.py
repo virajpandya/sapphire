@@ -34,6 +34,7 @@ from jax.random import PRNGKey, key
 from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec, NamedSharding
+from interpax import Interpolator1D
 
 from functools import partial 
 from timeit import default_timer as timer
@@ -42,11 +43,23 @@ import numpy as np
 
 # NOTE: more functionalities to be ported over soon for 
 # time-dependent parameters and forcing functions, t_eval grid, dense interpolation
-def setup(integrator,init_state,init_time,parameters,forcings,
+def setup(integrator,init_state,init_time,parameters,forcing_matrix,
           final_time,dt0,rtol,atol,max_steps,
           compute_Jacobians=True):
 
     tstart0 = timer()
+
+    ### forcings is a matrix of shape (Nforcings+1, Ntimes) 
+    ### the first row must be time (same units as integrator f's input time) 
+    
+    # convert forcing_matrix into list of interpolators for integrator rhs function
+    forcing_interps = [Interpolator1D(forcing_matrix[0],forcing_values,method="cubic2",
+                                      extrap=(forcing_values[0], forcing_values[-1]),) for forcing_values in forcing_matrix[1:]] 
+
+    
+    ### package fargs = (theta, forcings)
+    fargs = (parameters, forcing_interps)  
+
     
     ### following section II.4 of Hairer 1993 and section 13.5.2 of Corless & Fillon 2013
     ### adapted from Viraj Pandya's 2023 implementation from sapphire-jax prototype 
@@ -64,7 +77,7 @@ def setup(integrator,init_state,init_time,parameters,forcings,
     ### single rk stepper for any arbitrary butcher tableau for future extensibility if desired
     ### currently ignores FSAL (First Same As Last) optimization for RK23: k1=k4 for accepted steps
     
-    def jax_rk_step(f, t, x, dt, fargs):
+    def jax_rk_step(f, t, x, dt):
         """
         follows section 13.5.2 of Corless & Fillon 2013
     
@@ -72,7 +85,6 @@ def setup(integrator,init_state,init_time,parameters,forcings,
         t = current time
         x = current state vector
         dt = overall timestep size
-        fargs = extra args for input to f(t,y,fargs)
         """
         
         nstages = len(c)
@@ -143,10 +155,9 @@ def setup(integrator,init_state,init_time,parameters,forcings,
         return dt_new, err
 
     
-    # treat as static: rhs function f, forcings, max_steps
-    # eventually forcings will become non-static 
-    @partial(jit,static_argnums=(0,4,9)) 
-    def adaptive_rk23(f,t0,x0,theta,forcings,
+    # treat as static: rhs function f, max_steps
+    @partial(jit,static_argnums=(0,7)) 
+    def adaptive_rk23(f,t0,x0,
                       dt0,t_final,
                       atol,rtol,max_steps):
     
@@ -167,11 +178,8 @@ def setup(integrator,init_state,init_time,parameters,forcings,
                  "xs": xs, # state vector time series
                  # "success": False # will stay False if max_steps reached = failed solution
                  # add accepted which is 1 if yes, else 0
-                }    
-    
-        ### package fargs = (theta, forcings)
-        fargs = (theta, forcings)    
-    
+                }     
+        
         ### set up cond_fn and body_fn based on inputs
         def cond_fn(state):
     
@@ -190,7 +198,7 @@ def setup(integrator,init_state,init_time,parameters,forcings,
             dt = jnp.minimum(dt, t_final - t)
         
             # do single rk23 step
-            x3, x2 = jax_rk_step(f,t,x,dt,fargs)
+            x3, x2 = jax_rk_step(f,t,x,dt)
         
             # compute new adaptive timestep and error between rk23
             dt_new, err = adapt_dt(dt,x,x2,x3,atol,rtol)
@@ -252,7 +260,7 @@ def setup(integrator,init_state,init_time,parameters,forcings,
             ### x_aug := jnp.array(x,S.flattened) 
         
             # unpack args
-            theta, forcings = fargs
+            theta, forcing_interps = fargs
         
             # unpack physical state vector portion of x_aug
             x = x_aug[:Nx]
@@ -267,7 +275,7 @@ def setup(integrator,init_state,init_time,parameters,forcings,
             Jx = jax.jacfwd(lambda x_: integrator(t, x_, fargs))(x)
         
             # Jacobian of rhs f wrt parameters -- need to expose theta as an arg to autodiff wrt
-            Jtheta = jax.jacfwd(lambda theta_: integrator(t, x, (theta_, forcings)))(theta)
+            Jtheta = jax.jacfwd(lambda theta_: integrator(t, x, (theta_, forcing_interps)))(theta)
         
             # sensitivity matrix evolution ODE
             dSdt = Jx @ S + Jtheta
@@ -278,7 +286,7 @@ def setup(integrator,init_state,init_time,parameters,forcings,
         
         ### solve this augmented ODE system like any other 
         sol = adaptive_rk23(augmented_integrator,
-                            init_time,x0_aug,parameters,(),
+                            init_time,x0_aug,
                             dt0,final_time,
                             atol,rtol,max_steps)
 
@@ -306,31 +314,29 @@ def setup(integrator,init_state,init_time,parameters,forcings,
         ### compute df/dx along solution trajectory using vmap over x(t) 
         
         @partial(jit,static_argnums=(0,))
-        def compute_Jx_traj(integrator, ts, xs, parameters, forcings):
-        
-            fargs = (parameters, forcings)
+        def compute_Jx_traj(integrator, ts, xs):
         
             def Jx_at_point(t, x):
                 return jax.jacfwd(lambda x_: integrator(t, x_, fargs))(x)
         
             return jax.vmap(Jx_at_point,in_axes=(0,0))(ts, xs)
         
-        Jx_traj = compute_Jx_traj(integrator,t_traj,x_traj,parameters,())
+        Jx_traj = compute_Jx_traj(integrator,t_traj,x_traj)
                 
     
         ### similarly compute df/dtheta along solution trajectory using vmap over x(t) 
         
         @partial(jit,static_argnums=(0,))
-        def compute_Jtheta_traj(integrator, ts, xs, parameters, forcings):
+        def compute_Jtheta_traj(integrator, ts, xs):
         
-            fargs = (parameters, forcings)
+            parameters, forcing_interps = fargs
         
             def Jth_at_point(t, x):
-                return jax.jacfwd(lambda par: integrator(t, x, (par, forcings)))(parameters)
+                return jax.jacfwd(lambda par: integrator(t, x, (par, forcing_interps)))(parameters)
         
             return jax.vmap(Jth_at_point,in_axes=(0,0))(ts, xs)
         
-        Jtheta_traj = compute_Jtheta_traj(integrator,t_traj,x_traj,parameters,())
+        Jtheta_traj = compute_Jtheta_traj(integrator,t_traj,x_traj)
         
         ### return sol dict, t_traj, x(t), S(t), Jx(t), Jtheta(t)
         out_sapphire = {'sol':sol,'t':t_traj,'x':x_traj,'S':S_traj,'Jx':Jx_traj,'Jtheta':Jtheta_traj}
@@ -340,7 +346,7 @@ def setup(integrator,init_state,init_time,parameters,forcings,
         
         ### solve the user-input ODE system like any other 
         sol = adaptive_rk23(integrator,
-                            init_time,init_state,parameters,(),
+                            init_time,init_state,
                             dt0,final_time,
                             atol,rtol,max_steps)
 
