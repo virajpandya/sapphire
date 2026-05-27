@@ -41,25 +41,11 @@ from timeit import default_timer as timer
 import numpy as np
 
 
+# NOTE: more functionalities to be ported over soon for 
+# time-dependent parameters and forcing functions, t_eval grid, dense interpolation
 def setup(integrator,init_state,init_time,parameters,forcing_matrix,
-          final_time,dt0,rtol,atol,max_steps,output_times,compute_jacobians=False):
-    """
-    integrator = rhs function f
-    init_state = initial state vector x0 
-    init_time = initial time t0
-    parameters = free parameters in format expected by f 
-    forcing_matrix = (Ntimes, Ninputs)
-    final_time = final time t1
-    dt0 = initial timestep guess (recommended instead of adaptive guessers, typically 1e-10)
-    rtol = relative error tolerance for RK23 adaptive timestepper
-    atol = absolute error tolerance for RK23 adaptive timestepper
-    max_steps = maximum number of steps to try
-    output_times = jnp array of times at which to output dense solution
-    compute_jacobians = whether to return various jacobians at output_times
-
-    the following can be vmapped/shardmapped if the leading dimension is all same batch size:
-    init_state, init_time, parameters, forcing_matrix, output_times
-    """
+          final_time,dt0,rtol,atol,max_steps,compute_jacobians=False,
+          interp_nsteps=100):
 
     tstart0 = timer()
     
@@ -119,7 +105,7 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
         x3 = x + dt * jnp.tensordot(b3,k,axes=1)
         x2 = x + dt * jnp.tensordot(b2,k,axes=1)
         
-        return x3, x2, k 
+        return x3, x2   
 
     ### adaptive timestepper
     # set up safety factors for adaptive stepsizes 
@@ -144,13 +130,7 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
         # this could alternatively be done by grouping and subtracting individual k stages with coefficients
         # note this is normalized element-wise by maxerr above 
         err = jnp.sqrt(jnp.mean(((x3 - x2)/maxerr)**2)) 
-
-        # jax.debug.print("xnow={}", xnow)
-        # jax.debug.print("x2={}", x2)
-        # jax.debug.print("x3={}", x3)
-        # jax.debug.print("maxerr={}", maxerr)
-        # jax.debug.print('err={}',err)
-        
+    
         err = jnp.maximum(err, 1e-16)
         
         # compute multiplicative factor for new optimal step size (taking into account safety factors)
@@ -163,44 +143,30 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
         
         return dt_new, err
 
-
-    ### new manual local cubic hermite interpolator for dense_output along ODE solution
-    # this manual one is necessary since we re-use the RK23 stages for endpoint derivatives of interpolation
-    # https://en.wikipedia.org/wiki/Cubic_Hermite_spline
-    # https://erikerlandson.github.io/blog/2013/03/16/smooth-gradients-for-cubic-hermite-splines/
-    # https://www.rose-hulman.edu/~finn/CCLI/Notes/day09.pdf
-    def cubic_hermite_interp(t, t0, t1, x0, x1, k0, k1):
-
-        # first normalize timestep [t0,t1] to [0,1], then convert t into fractional interval step tau
-        h = t1 - t0
-        tau = (t - t0) / h
-        
-        # compute Hermite basis functions
-        h00 = 2*tau**3 - 3*tau**2 + 1
-        h10 = tau**3 - 2*tau**2 + tau
-        h01 = -2*tau**3 + 3*tau**2
-        h11 = tau**3 - tau**2
-        
-        return h00*x0 + h10*h*k0 + h01*x1 + h11*h*k1
-
-    
     
     # treat as static: rhs function f, max_steps
-    @partial(jit,static_argnums=(0,9)) 
+    @partial(jit,static_argnums=(0,8)) 
     def adaptive_rk23(f,t0,x0,fargs,
-                      dt0,t_final,output_ts,
+                      dt0,t_final,
                       atol,rtol,max_steps):
+    
+        # initialize time and state vectors
+        ts = jnp.zeros(max_steps)
+        xs = jnp.zeros((max_steps, x0.shape[0]))
         
-        # initialize dense interpolated solution state vector
-        output_xs = jnp.zeros((output_ts.shape[0], x0.shape[0]))        
+        # set first elements to ICs 
+        ts = ts.at[0].set(t0)
+        xs = xs.at[0].set(x0)
         
         # initialize dict as pytree to track state 
         state = {"t": t0, # current time
                  "x": x0, # current state 
                  "dt": dt0, # current adaptive timestep
                  "istep": 0, # current step number (to compare to max_steps)
-                 "output_xs": output_xs, # state vector time series
+                 "ts": ts, # adaptive time vector
+                 "xs": xs, # state vector time series
                  # "success": False # will stay False if max_steps reached = failed solution
+                 # add accepted which is 1 if yes, else 0
                 }     
         
         ### set up cond_fn and body_fn based on inputs
@@ -221,7 +187,7 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
             dt = jnp.minimum(dt, t_final - t)
         
             # do single rk23 step
-            x3, x2, k = jax_rk_step(f,t,x,dt,fargs)
+            x3, x2 = jax_rk_step(f,t,x,dt,fargs)
         
             # compute new adaptive timestep and error between rk23
             dt_new, err = adapt_dt(dt,x,x2,x3,atol,rtol)
@@ -230,39 +196,28 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
             accept = err <= 1.0
     
             def accept_fn(state):
-
-                # use masking to identify all output_times within (t,t_next) where we need to interpolate solution
-                t_next = t + dt
-                in_interval = (output_ts >= t) & (output_ts <= t_next) & (t_next > t)
-                mask = jnp.expand_dims(in_interval, axis=-1) # for broadcasting purposes w/ and w/o vmap
-                
-                # vmappable function to interpolate at all output_ts 
-                def single_time_interp(t_target):
-                    return cubic_hermite_interp(t_target, t, t_next, x, x3, k[0], k[-1])
-
-                # compute interpolated solutions xs at all output_ts
-                ### WARNING: this is expensive, interpolating over all ts, instead could do some kind of index mapping?
-                x_interp_all = jax.vmap(single_time_interp)(output_ts)
-
-                # use mask to update output_xs for output_ts within [t,t_next] 
-                updated_output_xs = jnp.where(mask, x_interp_all, state["output_xs"])
-
-                # update to next time, new state vector, new dt, increment step, and update output_xs
-                return {"t": t_next,
+    
+                t_accept = t + dt
+                istep_accept = istep + 1
+                ts_accept = state["ts"].at[istep_accept].set(t_accept)
+                xs_accept = state["xs"].at[istep_accept].set(x3)
+    
+                return {"t": t_accept,
                         "x": x3,
                         "dt": dt_new,
-                        "istep": state["istep"] + 1,
-                        "output_xs": updated_output_xs
+                        "istep": istep_accept,
+                        "ts": ts_accept,
+                        "xs": xs_accept,
                        }
-
-            # keep everything same except change to dt_new and increment istep 
+    
             def reject_fn(state):
                 
                 return {"t": t,
                         "x": x,
                         "dt": dt_new,
-                        "istep": state["istep"] + 1, # increment istep even for rejects, in case we hit total max_steps
-                        "output_xs": state["output_xs"],
+                        "istep": istep,
+                        "ts": state["ts"],
+                        "xs": state["xs"],
                        }
                 
         
@@ -276,6 +231,22 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
     
         return final_state
 
+
+    ##### interpolate all onto time grid with same # of output steps for vmap/shardmap purposes
+    # could have user specify interp_t, including whether its just outputting at final time... 
+    # currently not using dense interpolation (based on storing intermediate RK stages)
+    interp_t_traj = jnp.linspace(init_time,final_time,interp_nsteps) 
+
+    def interpfunc_traj(t_traj,vals_traj):
+        interp_traj = Interpolator1D(t_traj,vals_traj,method="cubic2",extrap=(vals_traj[0], vals_traj[-1]))
+        return interp_traj.__call__(interp_t_traj)
+
+    # interp vmapped state vector 
+    interpfunc_xvector = vmap(interpfunc_traj,in_axes=(None,1),out_axes=1)
+    
+    # for jacobian matrices, interp with double nested vmap over rows and columns
+    interpfunc_matrix = vmap(vmap(interpfunc_traj,in_axes=(None,1),out_axes=(None,1)),in_axes=(None,1),out_axes=(None,1))
+
     
     ### need to set up and solve augmented ODE system -- will jit/vmap/shardmap below
     # inputs here are batched, the others like integrator, max_steps, ... are taken from global setup(inputs) 
@@ -284,12 +255,14 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
         ### forcings is a matrix of shape (Nforcings+1, Ntimes) 
         ### the first row must be time (same units as integrator f's input time) 
         
-        # convert forcing_matrix into list of jittable/mappable interpolators for integrator rhs function
+        # convert forcing_matrix into list of interpolators for integrator rhs function
+        # these can be static-jitted/vmapped
         forcing_interps = [Interpolator1D(forcing_matrix[0],forcing_values,method="cubic2",
                                           extrap=(forcing_values[0], forcing_values[-1]),) for forcing_values in forcing_matrix[1:]] 
         
         ### package fargs = (theta, forcings)
         fargs = (parameters, forcing_interps)  
+        
 
         ### initialize augmented RHS
         Nx = init_state.shape[0]
@@ -334,23 +307,29 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
         ### solve this augmented ODE system like any other 
         sol = adaptive_rk23(augmented_integrator,
                             init_time,x0_aug,fargs,
-                            dt0,final_time,output_times,
+                            dt0,final_time,
                             atol,rtol,max_steps)
-        
+
         ### extract x(t) and S(t) 
         def unpack_aug_sol(sol, init_state, parameters):
         
-            output_xs = sol["output_xs"]
+            xs = sol["xs"]
         
             Nx = init_state.shape[0]
             Ntheta = parameters.shape[0]
         
-            x_traj = output_xs[:, :Nx]
-            S_traj = output_xs[:, Nx:].reshape(-1, Nx, Ntheta)
+            x_traj = xs[:, :Nx]
+            S_traj = xs[:, Nx:].reshape(-1, Nx, Ntheta)
         
-            return x_traj, S_traj
+            # limit to only the final # of steps actually solved, excluding padded max_steps
+            ### TO DO: also restrict to only accepted steps
+            t_traj = sol['ts'][:sol["istep"]+1]
+            x_traj = x_traj[:sol["istep"]+1]
+            S_traj = S_traj[:sol["istep"]+1]
         
-        x_traj, S_traj = unpack_aug_sol(sol,init_state,parameters)
+            return t_traj, x_traj, S_traj
+        
+        t_traj, x_traj, S_traj = unpack_aug_sol(sol,init_state,parameters)
 
         ### compute df/dx along solution trajectory using vmap over x(t) 
         
@@ -362,7 +341,7 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
         
             return jax.vmap(Jx_at_point,in_axes=(0,0))(ts, xs)
         
-        Jx_traj = compute_Jx_traj(integrator,output_times,x_traj)
+        Jx_traj = compute_Jx_traj(integrator,t_traj,x_traj)
                 
     
         ### similarly compute df/dtheta along solution trajectory using vmap over x(t) 
@@ -377,24 +356,37 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
         
             return jax.vmap(Jth_at_point,in_axes=(0,0))(ts, xs)
         
-        Jtheta_traj = compute_Jtheta_traj(integrator,output_times,x_traj)
+        Jtheta_traj = compute_Jtheta_traj(integrator,t_traj,x_traj)
 
-        ### update sol object to include the new jacobians
-        sol['output_xs'] = x_traj
-        sol['output_S'] = S_traj
-        sol['output_Jx'] = Jx_traj
-        sol['output_Jtheta'] = Jtheta_traj
 
-        return sol
+        ##### interpolate all onto time grid with same # of output steps for vmap/shardmap purposes
+        
+        # interp vmapped state vector 
+        interp_x_traj = interpfunc_xvector(t_traj,x_traj) 
+        
+        # for jacobian matrices, interp with double nested vmap over rows and columns
+        interp_S_traj = interpfunc_matrix(t_traj,S_traj)
+        interp_Jx_traj = interpfunc_matrix(t_traj,Jx_traj)
+        interp_Jtheta_traj = interpfunc_matrix(t_traj,Jtheta_traj)
+        
+        ### return sol dict, t_traj, x(t), S(t), Jx(t), Jtheta(t)
+        out_sapphire = {'sol':sol,
+                        't':interp_t_traj,
+                        'x':interp_x_traj,
+                        'S':interp_S_traj,
+                        'Jx':interp_Jx_traj,
+                        'Jtheta':interp_Jtheta_traj}
 
-    ### only need to solve baseline ODE system, no sensitivity jacobians, etc.
+        return out_sapphire
+
+    ### only need to solve baseline ODE system, no sensitivities, etc.
     def solve_original(init_state,init_time,parameters,forcing_matrix):
 
         ### forcings is a matrix of shape (Nforcings+1, Ntimes) 
         ### the first row must be time (same units as integrator f's input time) 
         
-        # convert forcing_matrix into list of jittable/mappable interpolators for integrator rhs function
-        # this automatically deals with empty forcing_matrix inputs like ()
+        # convert forcing_matrix into list of interpolators for integrator rhs function
+        # these can be static-jitted/vmapped
         forcing_interps = [Interpolator1D(forcing_matrix[0],forcing_values,method="cubic2",
                                           extrap=(forcing_values[0], forcing_values[-1]),) for forcing_values in forcing_matrix[1:]] 
         
@@ -404,52 +396,52 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
         ### solve the user-input ODE system like any other 
         sol = adaptive_rk23(integrator,
                             init_time,init_state,fargs,
-                            dt0,final_time,output_times,
+                            dt0,final_time,
                             atol,rtol,max_steps)
 
-        return sol
-
-
-    ### auto-applies vmap or shardmap+vmap based on shapes of input init_state, init_time, parameters, forcing_matrix
-    # NOTE: could extend to map over different final_time, etc.
-    # NOTE: can make this more elegant ... 
-    def apply_jit_map(solve_func):
-
-        ### there are many other combinations that can be added as needed
-
-        ####### up front use jax.devices to decide about shard_map, like I did for diffrax
-
-        if len(init_state.shape) == 1:
-            print('only jit, no vmap',flush=True)
-            return jit(solve_func)
-
-        elif len(init_state.shape) > 1 and len(parameters) == 0 and len(forcing_matrix)==0:
-            print('only vmap over ICs with empty parameters/forcings',flush=True)
-            return jit(vmap(solve_func,in_axes=(0,None,None,None)))
+        ### extract x(t) excluding extra padded max_steps 
+        # TO DO: also exclude any rejected steps
+        def unpack_sol(sol, init_state):
         
-        elif len(init_state.shape) > 1 and len(parameters.shape) == 1 and len(forcing_matrix.shape)==1:
-            print('only vmap over ICs',flush=True)
-            return jit(vmap(solve_func,in_axes=(0,None,None,None)))
+            xs = sol["xs"]
+        
+            Nx = init_state.shape[0]
+        
+            x_traj = xs[:, :Nx]
+        
+            # limit to only the final # of steps actually solved, excluding padded max_steps
+            ### TO DO: also restrict to only accepted steps
+            t_traj = sol['ts'][:sol["istep"]+1]
+            x_traj = x_traj[:sol["istep"]+1]
+        
+            return t_traj, x_traj
+        
+        t_traj, x_traj = unpack_sol(sol,init_state)
 
-        elif len(init_state.shape) > 1 and len(parameters.shape) > 1 and len(forcing_matrix.shape)==1:
-            print('vmap over ICs and parameters',flush=True)
-            return jit(vmap(solve_func,in_axes=(0,None,0,None)))
+        # interp vmapped state vector 
+        interp_x_traj = interpfunc_xvector(t_traj,x_traj)       
 
-        elif len(init_state.shape) > 1 and len(parameters.shape) == 1 and len(forcing_matrix.shape) > 1:
-            print('vmap over ICs and forcings',flush=True)
-            return jit(vmap(solve_func,in_axes=(0,None,None,0)))    
+        ## return signature
+        out_sapphire = {'sol':sol,'t':interp_t_traj,'x':interp_x_traj}
 
-        elif len(init_state.shape) > 1 and len(parameters.shape) > 1 and len(forcing_matrix.shape) > 1:
-            print('vmapping over ICs, params, and forcings',flush=True)
-            return jit(vmap(solve_func,in_axes=(0,None,0,0)))        
+        return out_sapphire
 
 
-    ### return requested function -- user must jit, vmap, shard_map on their own
+    ### port over vmap and shard_map to try many ICs, params, etc.
     if compute_jacobians is True:
-        return apply_jit_map(solve_augmented)
+        out_sapphire = jit(solve_augmented)(init_state,init_time,parameters,forcing_matrix)
+
     elif compute_jacobians is False:
-        return apply_jit_map(solve_original)
-        
+        tstart = timer()
+        out_sapphire = jit(solve_original)(init_state,init_time,parameters,forcing_matrix)
+        print('compiled in %.5f sec'%(timer()-tstart),flush=True)
+
+        tstart = timer()
+        out_sapphire = jit(solve_original)(init_state,init_time,parameters,forcing_matrix)
+        print('jitted ran in %.5f sec'%(timer()-tstart),flush=True)    
+    
+    print('finished in %.5f sec'%(timer()-tstart0),flush=True)
+    return out_sapphire
     
         
 #
