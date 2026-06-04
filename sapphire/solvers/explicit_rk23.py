@@ -41,10 +41,12 @@ from timeit import default_timer as timer
 import numpy as np
 
 
-def setup(integrator,init_state,init_time,parameters,forcing_matrix,
-          final_time,dt0,rtol,atol,max_steps,output_times,compute_jacobians=False):
-    """
-    integrator = rhs function f
+def setup(integrator,rhs_terms,init_state,init_time,parameters,forcing_matrix,
+          final_time,dt0,rtol,atol,max_steps,output_times,
+          compute_jacobians=False,apply_shard_map=False):
+    """    
+    integrator = main rhs function f that returns state derivatives (based on modular rhs_terms)
+    rhs_terms = auxiliary function that returns all rhs terms along solution trajectory
     init_state = initial state vector x0 
     init_time = initial time t0
     parameters = free parameters in format expected by f 
@@ -56,6 +58,7 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
     max_steps = maximum number of steps to try
     output_times = jnp array of times at which to output dense solution
     compute_jacobians = whether to return various jacobians at output_times
+    apply_shard_map = whether to shard parameter*halos solves over multiple devices 
 
     the following can be vmapped/shardmapped if the leading dimension is all same batch size:
     init_state, init_time, parameters, forcing_matrix, output_times
@@ -285,11 +288,12 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
         ### the first row must be time (same units as integrator f's input time) 
         
         # convert forcing_matrix into list of jittable/mappable interpolators for integrator rhs function
-        forcing_interps = [Interpolator1D(forcing_matrix[0],forcing_values,method="cubic2",
-                                          extrap=(forcing_values[0], forcing_values[-1]),) for forcing_values in forcing_matrix[1:]] 
+        # forcing_interps = [Interpolator1D(forcing_matrix[0],forcing_values,method="cubic2",
+        #                                   extrap=(forcing_values[0], forcing_values[-1]),) for forcing_values in forcing_matrix[1:]] 
         
         ### package fargs = (theta, forcings)
-        fargs = (parameters, forcing_interps)  
+        # fargs = (parameters, forcing_interps)  
+        fargs = (parameters, forcing_matrix)  
 
         ### initialize augmented RHS
         Nx = init_state.shape[0]
@@ -307,7 +311,7 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
             ### x_aug := jnp.array(x,S.flattened) 
         
             # unpack args
-            theta, forcing_interps = fargs
+            theta, forcings = fargs
         
             # unpack physical state vector portion of x_aug
             x = x_aug[:Nx]
@@ -322,7 +326,7 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
             Jx = jax.jacfwd(lambda x_: integrator(t, x_, fargs))(x)
         
             # Jacobian of rhs f wrt parameters -- need to expose theta as an arg to autodiff wrt
-            Jtheta = jax.jacfwd(lambda theta_: integrator(t, x, (theta_, forcing_interps)))(theta)
+            Jtheta = jax.jacfwd(lambda theta_: integrator(t, x, (theta_, forcings)))(theta)
         
             # sensitivity matrix evolution ODE
             dSdt = Jx @ S + Jtheta
@@ -370,10 +374,10 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
         @partial(jit,static_argnums=(0,))
         def compute_Jtheta_traj(integrator, ts, xs):
         
-            parameters, forcing_interps = fargs
+            parameters, forcings = fargs
         
             def Jth_at_point(t, x):
-                return jax.jacfwd(lambda par: integrator(t, x, (par, forcing_interps)))(parameters)
+                return jax.jacfwd(lambda par: integrator(t, x, (par, forcings)))(parameters)
         
             return jax.vmap(Jth_at_point,in_axes=(0,0))(ts, xs)
         
@@ -395,11 +399,12 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
         
         # convert forcing_matrix into list of jittable/mappable interpolators for integrator rhs function
         # this automatically deals with empty forcing_matrix inputs like ()
-        forcing_interps = [Interpolator1D(forcing_matrix[0],forcing_values,method="cubic2",
-                                          extrap=(forcing_values[0], forcing_values[-1]),) for forcing_values in forcing_matrix[1:]] 
+        # forcing_interps = [Interpolator1D(forcing_matrix[0],forcing_values,method="cubic2",
+        #                                   extrap=(forcing_values[0], forcing_values[-1]),) for forcing_values in forcing_matrix[1:]] 
         
         ### package fargs = (theta, forcings)
-        fargs = (parameters, forcing_interps)  
+        # fargs = (parameters, forcing_interps)  
+        fargs = (parameters, forcing_matrix)  
         
         ### solve the user-input ODE system like any other 
         sol = adaptive_rk23(integrator,
@@ -409,46 +414,210 @@ def setup(integrator,init_state,init_time,parameters,forcing_matrix,
 
         return sol
 
+    ### also define a second function that returns all auxiliary rhs terms along solution trajectory
+    def aux_evaluator(logt,logy,parameters,forcing_matrix):
+        """
+        logt = array of solution output times, shape = (Ntimes,)
+        logy = array of solution state vector, shape = (Nbatch, Ntimes, Nstate) if batched, else (Ntimes, Nstate)
+        parameters = array of parameters, shape = (Nbatch, Nparams) if batched, else (Nparams,)
+        forcing_matrix = array of forcing matrices, shape = (Nbatch, Nforcings+1, Ntimes) if batched, else (Nforcings+1, Ntimes)
+    
+        output shape for dict elements = (Nbatch, Ntimes) if batched, else (Ntimes,) 
+        """
 
-    ### auto-applies vmap or shardmap+vmap based on shapes of input init_state, init_time, parameters, forcing_matrix
+        # convert forcing_matrix into list of jittable/mappable interpolators for integrator rhs function
+        # this automatically deals with empty forcing_matrix inputs like ()
+        # forcing_interps = [Interpolator1D(forcing_matrix[0],forcing_values,method="cubic2",
+        #                                   extrap=(forcing_values[0], forcing_values[-1]),) for forcing_values in forcing_matrix[1:]] 
+        
+        ### package fargs = (theta, forcings)
+        # fargs = (parameters, forcing_interps)  
+        fargs = (parameters, forcing_matrix)  
+
+        ### this is necessary in case Nstate>1 for broadcasting inside rhs_terms -- but abstracting it away from user
+        logy = jnp.swapaxes(logy,-1,-2) 
+        
+        terms = rhs_terms(logt,logy,fargs)
+    
+        return terms        
+    
+
+    ### auto-applies jit and vmap based on shapes of input init_state, init_time, parameters, forcing_matrix
     # NOTE: could extend to map over different final_time, etc.
     # NOTE: can make this more elegant ... 
-    def apply_jit_map(solve_func):
+    def apply_jit_vmap(solve_func,aux_func):
 
-        ### there are many other combinations that can be added as needed
-
-        ####### up front use jax.devices to decide about shard_map, like I did for diffrax
+        ### there are many other combinations that can be added as needed     
 
         if len(init_state.shape) == 1:
             print('only jit, no vmap',flush=True)
-            return jit(solve_func)
+            return (jit(solve_func), 
+                    jit(aux_func))
 
         elif len(init_state.shape) > 1 and len(parameters) == 0 and len(forcing_matrix)==0:
             print('only vmap over ICs with empty parameters/forcings',flush=True)
-            return jit(vmap(solve_func,in_axes=(0,None,None,None)))
+            return (jit(vmap(solve_func,in_axes=(0,None,None,None))), 
+                    jit(vmap(aux_func,in_axes=(None,0,None,None))))
         
         elif len(init_state.shape) > 1 and len(parameters.shape) == 1 and len(forcing_matrix.shape)==1:
             print('only vmap over ICs',flush=True)
-            return jit(vmap(solve_func,in_axes=(0,None,None,None)))
+            return (jit(vmap(solve_func,in_axes=(0,None,None,None))),
+                    jit(vmap(aux_func,in_axes=(None,0,None,None))))
 
         elif len(init_state.shape) > 1 and len(parameters.shape) > 1 and len(forcing_matrix.shape)==1:
             print('vmap over ICs and parameters',flush=True)
-            return jit(vmap(solve_func,in_axes=(0,None,0,None)))
+            return (jit(vmap(solve_func,in_axes=(0,None,0,None))),
+                    jit(vmap(aux_func,in_axes=(None,0,0,None))))
 
         elif len(init_state.shape) > 1 and len(parameters.shape) == 1 and len(forcing_matrix.shape) > 1:
             print('vmap over ICs and forcings',flush=True)
-            return jit(vmap(solve_func,in_axes=(0,None,None,0)))    
+            return (jit(vmap(solve_func,in_axes=(0,None,None,0))),
+                    jit(vmap(aux_func,in_axes=(None,0,None,0))))
 
         elif len(init_state.shape) > 1 and len(parameters.shape) > 1 and len(forcing_matrix.shape) > 1:
             print('vmapping over ICs, params, and forcings',flush=True)
-            return jit(vmap(solve_func,in_axes=(0,None,0,0)))        
+            return (jit(vmap(solve_func,in_axes=(0,None,0,0))),
+                    jit(vmap(aux_func,in_axes=(None,0,0,0))))
+
+    ### alternative function that auto-applies jit, shard_map and nested vmaps 
+    ### this is useful for parallelizing ODE solves over multiple devices
+    ### user must make sure that # of halos or parameter sets = integer multiple of Ndevices
+    def apply_jit_shardmap(solve_func,aux_func):
+        """
+        currently this only does two main use cases: 
+        1. shard over params (for predictive checks and training set generation)
+        2. shard over ICs for a single parameter set (for optimization/inference)
+
+        #2 also accounts for cases where params is expanded to match # ICs
+        e.g., if base parameters has some that depend on each object (e.g., final halo mass)
+        """
+
+        ### first auto-detect what use case we are in based on global inputs to this module
+        ### and set up inner/outer vmap and shard_map axes 
+
+        if len(parameters) == 0 and len(forcing_matrix) == 0:
+
+            print('applying shard_map over many ICs with EMPTY parameters array',flush=True)
+
+            vmapped_solver = vmap(solve_func,in_axes=(0,None,None,None))
+            vmapped_aux_evaluator = vmap(aux_func,in_axes=(None,0,None,None))        
+
+            shmap_specs_solver = (PartitionSpec('i'),PartitionSpec(),PartitionSpec(),PartitionSpec())
+            shmap_specs_aux = (PartitionSpec(),PartitionSpec('i'),PartitionSpec(),PartitionSpec())                 
+            
+        
+        elif len(parameters.shape) == 1: 
+
+            # shard over many ICs for a single parameter set -- classic optimization/inference case
+            # parameters.shape=(Nparams), init_state.shape=(Nhalos,Nstate), forcing_matrix.shape=(Nhalos,Nforcings+1,Ntimes)
+
+            print('applying shard_map over many ICs for single parameter set',flush=True)
+
+            ### note that input args for (logt,logy) are reversed for aux_evaluator vs solve_func
+            ### and note here that sol_xs axis also has a new leading batch dimension
+            vmapped_solver = vmap(solve_func,in_axes=(0,None,None,0))
+            vmapped_aux_evaluator = vmap(aux_func,in_axes=(None,0,None,0))        
+
+            shmap_specs_solver = (PartitionSpec('i'),PartitionSpec(),PartitionSpec(),PartitionSpec('i'))
+            shmap_specs_aux = (PartitionSpec(),PartitionSpec('i'),PartitionSpec(),PartitionSpec('i'))         
+            
+        elif len(parameters.shape) == 2:
+
+            # shard over many ICs and matching 1-1 number of parameter sets (and forcing functions)
+            # the behavior here requires user to specify cartesian vs pairwise combo of parameters and init_state 
+            # parameters.shape=(Nprior,Nparams), init_state.shape=(Nhalos,Nstate), forcing_matrix.shape=(Nhalos,Nforcings+1,Ntimes)
+
+            print('applying %s shard_map over ICs and parameter sets'%apply_shard_map,flush=True)
+
+            if apply_shard_map == 'pairwise':
+                # this version is when each parameter is 1-1 mapped with init_state 
+                vmapped_solver = vmap(solve_func,in_axes=(0,None,0,0))
+                vmapped_aux_evaluator = vmap(aux_func,in_axes=(None,0,0,0))
+
+                shmap_specs_solver = (PartitionSpec('i'),PartitionSpec(),PartitionSpec('i'),PartitionSpec('i'))         
+                shmap_specs_aux = (PartitionSpec(),PartitionSpec('i'),PartitionSpec('i'),PartitionSpec('i'))        
+            
+            elif apply_shard_map == 'cartesian':
+                # this version is when you want to cross every parameter set with every halo
+                # this assumes ICs and forcing_matrix are 1-1 mapped -- later can add cases for no forcing, etc. 
+                vmapped_solver = vmap(vmap(solve_func,in_axes=(0,None,None,0)),in_axes=(None,None,0,None))
+                vmapped_aux_evaluator = vmap(vmap(aux_func,in_axes=(None,0,None,0)),in_axes=(None,None,0,None))
+
+                shmap_specs_solver = (PartitionSpec(),PartitionSpec(),PartitionSpec('i'),PartitionSpec())         
+
+                # for aux evaluator, assume sol_xs has new leading batch dimension of Nprior
+                shmap_specs_aux = (PartitionSpec(),PartitionSpec('i'),PartitionSpec('i'),PartitionSpec())
+                
+            else:
+                raise ValueError('apply_shard_map must be None, False, cartesian or pairwise')            
+        
+        elif len(parameters.shape) == 3:
+
+            # shard over many parameters for predictive checks or training set generation
+            # this version is when a single set of base parameters are tiled for each IC so extra inner vmap is needed
+            # parameters.shape=(Nprior,Nhalos,Nparams), init_state.shape=(Nhalos,Nstate), forcing_matrix.shape=(Nhalos,Nforcings+1,Ntimes)        
+
+            print('applying shard_map over many parameters',flush=True)
+
+            
+            vmapped_solver = vmap(vmap(solve_func,in_axes=(0,None,0,0)),in_axes=(None,None,0,None))
+            vmapped_aux_evaluator = vmap(vmap(aux_func,in_axes=(None,0,0,0)),in_axes=(None,0,0,None))
+
+            shmap_specs_solver = (PartitionSpec(None),PartitionSpec(),PartitionSpec('i'),PartitionSpec(None))
+            
+            # for aux evaluator, assume sol_xs has new leading batch dimension of Nprior
+            shmap_specs_aux = (PartitionSpec(),PartitionSpec('i'),PartitionSpec('i'),PartitionSpec(None))  
+
+        else:
+            
+            raise NotImplementedError('combo of parameters.shape and init_state.shape not yet implemented')
+            
+        """ 
+        WARNING: one use case is missing where len(parameters.shape)==2 and parameters.shape[0]!=init_state.shape[0] 
+        but you still want combos w/ outer_vmap 
+        """            
+        
+        ### set up device mesh [so far this is universal to any runtype below but may be made more sophisticated in future]
+        Ndevices = jax.local_device_count()
+        
+        mesh = Mesh(mesh_utils.create_device_mesh((Ndevices,)), axis_names=('i',))  
+        
+        if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) > 1:
+            print('applying multi-CPU/GPU shard_map over %s devices'%Ndevices,flush=True)
+
+            batch_solve = jit(shard_map(vmapped_solver,
+                                        mesh=mesh,
+                                        in_specs=shmap_specs_solver,
+                                        out_specs=PartitionSpec('i'),check_rep=False,))
+            
+            batch_aux = jit(shard_map(vmapped_aux_evaluator,
+                                        mesh=mesh,
+                                        in_specs=shmap_specs_aux, 
+                                        out_specs=PartitionSpec('i'),check_rep=False))
+
+            return batch_solve, batch_aux
+        
+        elif len(jax.devices('gpu')) == 1: 
+            raise NotImplementedError('still need to port this over')
 
 
-    ### return requested function -- user must jit, vmap, shard_map on their own
+    ### return requested solver function and aux_evaluator
+    ### can probably add in_axes arg to apply_jit_map and call separate for solver vs aux_evaluator
     if compute_jacobians is True:
-        return apply_jit_map(solve_augmented)
+        
+        if apply_shard_map in [None,False]:
+            return apply_jit_vmap(solve_augmented,aux_evaluator)
+            
+        else:
+            return apply_jit_shardmap(solve_augmented,aux_evaluator)
+            
     elif compute_jacobians is False:
-        return apply_jit_map(solve_original)
+        
+        if apply_shard_map in [None,False]:
+            return apply_jit_vmap(solve_original,aux_evaluator)
+            
+        else:
+            return apply_jit_shardmap(solve_original,aux_evaluator)
         
     
         

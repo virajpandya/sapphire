@@ -31,10 +31,13 @@ from jax.sharding import Mesh, PartitionSpec, NamedSharding
 import optax
 
 
-def setup(config,loss_func,grad_loss_func):
+def setup(config,loss_func,grad_loss_func,loss_and_grad_func=None):
+    """ 
+    July 24 2025 -- vmap on single GPU, otherwise sequential on CPU (not enough cores)
+    NOTE: this should be updated to use shard_map for multi-GPU 
 
-    """ July 24 -- vmap on single GPU, otherwise sequential on CPU (not enough cores)
-    NOTE: this should be updated to somehow use shard_map for multi-GPU """
+    June 4 2026 -- new loss_and_grad_func returns both (loss, grad_loss), supersedes the other two
+    """
 
     inference_config = config['inference_config']
     sampling_config = config['sampling_config']
@@ -51,7 +54,7 @@ def setup(config,loss_func,grad_loss_func):
     # the conditional for shape makes it easier to deal with single guess (no need to access [0]) -- can be generalized later
     
     initial_params_dict = {pname: jax.random.uniform(init_keys[i], 
-                                                shape=() if inference_config['Nadam'] == 1 else (inference_config['Nadam'],),
+                                                shape=(inference_config['Nadam'],),
                                                 minval=plow, maxval=phigh)
                            for i, (pname, (plow, phigh)) in enumerate(params_bounds.items())}
 
@@ -62,7 +65,15 @@ def setup(config,loss_func,grad_loss_func):
     
     print('initial_params_arr\n',initial_params_arr,flush=True)    
 
-    def run_adam_while(init_params,loss_func,grad_loss_func):
+    ### June 2026 -- minimal wrapper that returns both loss and grad(loss) if needed
+    if loss_and_grad_func is None:
+
+        @jit # assumes loss and grad funcs are already jitted and/or jit-compatible...
+        def loss_and_grad_func(params):
+            return loss_func(params), grad_loss_func(params)
+    
+
+    def run_adam_while(init_params,loss_and_grad_func):
     
         max_loops = 1000
     
@@ -86,7 +97,7 @@ def setup(config,loss_func,grad_loss_func):
         opt_state = optimizer.init(init_params)
         
         # initialize loss for jax.lax.while_loop
-        loss0 = loss_func(init_params)
+        loss0, grad0 = loss_and_grad_func(init_params)
         # print('loss0',loss0,flush=True)
     
         # allocate (max_loops, Nfree) trace arrays
@@ -112,8 +123,7 @@ def setup(config,loss_func,grad_loss_func):
              trace_params,trace_loss,trace_grads,trace_updatenorm,trace_dlogL) = state
             
             # eval loss and grad loss
-            loss = loss_func(params)
-            grads = grad_loss_func(params)
+            loss, grads = loss_and_grad_func(params)
 
             # apply updates to parameters based on adam grad transforms
             updates, opt_state = optimizer.update(grads, opt_state, params)
@@ -154,7 +164,7 @@ def setup(config,loss_func,grad_loss_func):
 
         # no vmap over multiple initial guesses / trajectories if running on single CPU node
         # TBD whether we allow multiple adams on single GPU
-        run_adam_while = jit(run_adam_while,static_argnums=(1,2)) # don't jit-trace the input loss and grad(loss) functions
+        run_adam_while = jit(run_adam_while,static_argnums=(1,)) # don't jit-trace the input loss and grad(loss) functions
     
         # we'll stack outputs afterwards so all are same shape (3, XXX) and name as vmap-GPU version
         finali_3,final_params_3,trace_params_3,trace_loss_3,trace_grads_3,trace_updatenorm_3,trace_dlogL_3 = [],[],[],[],[],[],[]
@@ -173,7 +183,7 @@ def setup(config,loss_func,grad_loss_func):
             tstarti = timer()
         
             # call adam 
-            out_adam = run_adam_while(initial_params_this,loss_func,grad_loss_func)
+            out_adam = run_adam_while(initial_params_this,loss_and_grad_func)
             this_finali = out_adam[0].block_until_ready()
             telapsedi = timer()-tstarti 
             print('finished ic_num=%s in %.2f sec, finali=%s'%(ic_num,telapsedi,this_finali),flush=True)
@@ -204,13 +214,13 @@ def setup(config,loss_func,grad_loss_func):
         
         print('---------> vmap run_adam_while over multi-GPU',flush=True)
     
-        run_adam_while = jit(vmap(run_adam_while,in_axes=(0,None,None)),static_argnums=(1,2))
+        run_adam_while = jit(vmap(run_adam_while,in_axes=(0,None,None)),static_argnums=(1,))
     
         tstart = timer()
         
         (finali_3, final_params_3,
          trace_params_3, trace_loss_3, trace_grads_3,
-         trace_updatenorm_3,trace_dlogL_3) = run_adam_while(initial_params_arr,loss_func,grad_loss_func)
+         trace_updatenorm_3,trace_dlogL_3) = run_adam_while(initial_params_arr,loss_and_grad_func)
 
 
     
