@@ -1,0 +1,198 @@
+### general sapphire config 
+
+# if running on CPU, set this to # cores (idiosyncrasy of jax)
+# unnecessary for GPUs (which jax auto-detects)
+num_cpus: 50 
+
+# path to sapphire data directory (typically /path/to/sapphire/data/)
+data_path: '/mnt/ceph/users/vpandya/sapphire/data/'
+
+# which sapphire/data/trees/ subdirectory to use (see sapphire/trees/jax_read_trees.py)
+# NOTE: will try to enforce metadata in jaxified-sapphire tree format, so we can eventually remove this 
+# tree_type: 'cdhmah' 
+# tree_filename: 'rewrite_cdhmah_Planck18.npz' 
+# tree_batches: 1 
+tree_type: 'tng' # tng, cdhmah
+tree_filename: 'tng100_subvolumes%s_jax.npz' # tng100_subvolumes%s_jax.npz, rewrite_cdhmah_{cosmo}.npz
+tree_batches: 5 # 1 for cdhmah, 6 for TNG50, 5 for TNG100, 7 for TNG300
+
+# number halos per iteration; if on CPU or multi-GPU, must be integer multiple of devices
+# these are subsampled from 
+Nbatch: 1000
+
+# cosmological parameters (default=Planck15) 
+params_cosmo: 
+    Om0: 0.3075 # colossus and Planck+15 paper are 0.3089, but see astropy: https://github.com/astropy/astropy/issues/16674 
+    Ode0: 0.6910
+    Ob0: 0.0486
+    h0: 0.6774
+    sigma8: 0.8159
+    Tcmb0: 2.7255
+    Neff: 3.0460
+    ns: 0.9667
+
+# which physical model (diffeq system and parameterizations) to use
+# NOTE: this will be further modularized later 
+model: 'pandya23'
+
+# which cooling function to use
+# NOTE: this will be moved within a physical_config combined with model above 
+coolfunc: 'sd93'
+
+# must be 'single', 'sampling', 'inference', 'benchmark'
+runtype: 'inference'
+
+# if true, then returns both solution and jacobian of ODEs for runtype in ['single','sampling']
+return_sensitivity_jacobians: False
+
+### moving these outside to prevent complicated nested dict merge 
+rng_sample: 1 # RNG key used for sampling 
+rng_init: 1 # rng key for samplers for reproducibility 
+rng_halos: 3 # rng key for subsampling random halos 
+
+### whether to run the initial solver again post-jit to benchmark runtime
+post_jit_benchmark: False
+
+### what redshifts to output posterior (or prior) predictives at -- can be a scalar or list of scalars
+# NOTE: most of the code is designed to only run with this as a z=0.0 scalar
+# TO DO: generalize (see solvers/diffrax.py) 
+output_redshifts: 0.0 # [0.0, 2.0]
+
+### diffeq solver config
+solver_config:
+    engine: 'diffrax'
+    rtol: 1.0e-8
+    atol: 1.0e-8
+    max_steps: 65536 # must be integer power of 16
+
+### baseline parameters for physical model
+# some of these may be overridden by sampling_config below, if inference or random mock requested
+# NOTE: this needs to be further modularized / coupled to physical_model section above
+params_fixed_astro: 
+    alpha_n: -1.5 # slope of CGM density power law  
+    alpha_T: 0.0 # slope of CGM temperature power law 
+    f_recycle: 0.4 # instantaneous stellar-->ISM recycling fraction 
+    yZ: 0.02 # metal yield of 1 SN per 100 Msun of stars formed (2 Msun / 100 Msun = 0.02 for 10 Msun of SN ejecta) 
+
+    ### typically free parameters 
+    # NOTE: somehow modularize the description so it's always obvious what A_X and alpha0_X are for power laws, etc. 
+    A_M: 0.0 # log10 power law normalization 
+    alpha0_M: -1.0 # power law slope 
+    A_E: -1.0 
+    alpha0_E: -1.0
+    A_SF: 0.8
+    alpha0_SF: -1.8
+    A_Z: -1.7
+    alpha0_Z: -0.3
+
+    ### typically fixed parameters
+    alphaz_M: 0.0 # redshift dependence of power law slope
+    beta_M: 0.0 # redshift dependence of power law normalization 
+    alphaz_E: 0.0
+    beta_E: 0.0
+    alphaz_SF: 0.0
+    beta_SF: -0.7
+    alphaz_Z: 0.0
+    beta_Z: 0.0
+    A_Zin_halo: 0.25
+
+                             
+# this determines how sampling is done for training set generation or the true mock parameters for inference
+sampling_config: 
+    # posterior, latin_hypercube
+    method: 'latin_hypercube' 
+
+    # this is to be used with method='posterior' above, and will be appended to output_path/outputs below
+    # this should have 'chain%s' in it for all integer chain nums to be read in and merged
+    posterior_file: 'numpyro_mix_chain%s_111_slope4_mzrgas.npz'
+
+    # if on CPU or multi-GPU, MUST be equal to or an integer multiple of devices
+    Nsamples: 100 
+    
+    # this simultaneously specifies which params are free and their bounds for Uniform sampling
+    # NOTE: this could be made more general for non-Uniform priors
+    params_bounds: 
+        A_M: [-2.0,1.0]
+        alpha0_M: [-4.0,0.0]
+        A_E: [-2.0,0.0]
+        alpha0_E: [-4.0,0.0]
+        A_SF: [0.0,1.1]
+        alpha0_SF: [-4.0,0.0]
+        A_Z: [-2.0,0.0]
+        alpha0_Z: [-4.0,0.0]
+
+
+# if you want to run inference -- ONLY if runtype == 'inference' above 
+inference_config:
+    engine: 'nuts' # adam, nuts
+    adam_logL: 'manual' # manual, numpyro; did the user define a logL manually or with a probabilistic programming language 
+    Nadam: 10 # number of initial guesses / trajectories for adam
+
+    # if True, will use mock_err below and sampling_config above
+    fit_mock: False
+      
+    # False = user inputs true mock params in sampling_config above
+    # True = sample single set of mock params (w/ bounds in sampling_config) and merge w/ fixed_params_astro above otherwise
+    random_mock: False
+
+    # save output? (sapphire auto-detects adam vs numpyro vs ...)
+    write_output: True
+
+    # toggle using observational constraints and path to file
+    fit_obs: True
+
+    ### numpyro HMC/NUTS options
+    num_warmup: 1000
+    num_samples: 1000
+
+
+####### I moved these outside inference_config to avoid deep-merging dicts 
+### flags to turn on (1) or off (0) different constraints' contribution to likelihood 
+flag_smhm: 1 
+flag_fgas: 1 
+flag_mzr: 0 
+flag_sfms: 0 
+flag_mzr_gas: 1 
+  
+### assumed mock errors -- only used if inference_config['fit_mock']==True AND (as safeguard) inference_config['fit_obs']==False
+# "constant" in dex added in quadrature to intrinsic stderr(y)
+mock_err_smhm: 0.0
+mock_err_fgas: 0.0 
+mock_err_mzr: 0.0
+mock_err_sfms: 0.0
+mock_err_mzr_gas: 0.0
+
+### systematic shift up/down for each scaling relation (applied in read_obs.py)
+shift_smhm: 0.0
+shift_fgas: 0.0
+shift_mzr: 0.0
+shift_sfms: 0.0
+shift_mzr_gas: 0.0
+
+### re-scaling of fiducial observational errors (different from mock_err_XXX above since this multiplies instead of quad-summing)
+# default should be 1.0 so input obs errors remain as-is  [applied in read_obs.py]
+scale_err_smhm: 1.0
+scale_err_fgas: 1.0
+scale_err_mzr: 1.0 
+scale_err_sfms: 1.0 
+scale_err_mzr_gas: 1.0
+
+### Feb 16 -- max value to clip etaE power law at within sapphire/models/pandya23.py
+clip_etaE_max: 1.0
+
+### chain_num and mock_num here for easy command line argparse without nested dicts...
+chain_num: 0
+
+### sapphire/utils/read_data will read multiple files from sapphire/data/obs/obs_name/ if fit_obs=True
+obs_name: 'mix' # so far: manga, lit or mix
+
+# where to store npz outputs, figures 
+# sapphire will automatically generate subdirectories for outputs, figures, 
+# any {config_variable} will be pre-pended by f so variables get filled in
+# NOTE: perhaps write a script that automates generation (and/or submission of) disbatch task file
+# NOTE: perhaps add more customization options here for prefix, suffix, generic filename format, etc.
+output_path: '/mnt/ceph/users/vpandya/sapphire_outputs/' 
+output_suffix: '{flag_smhm}{flag_fgas}{flag_mzr_gas}' 
+output_prefix: 'numpyro_{obs_name}_chain{chain_num}' # for adam, sapphire/utils/write_results.py just does adam_{obs_name}
+
+# 

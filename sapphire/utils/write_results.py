@@ -48,7 +48,7 @@ def create_output_subdirs(config):
         
         if os.path.exists(os.path.join(config['output_path'],subdir)) == False:
             print('creating %s'%os.path.join(config['output_path'],subdir),flush=True)
-            os.makedirs(os.path.join(config['output_path'],subdir))
+            os.makedirs(os.path.join(config['output_path'],subdir),exist_ok=True)
 
 
 # this saves adam/MAP/fisher output as an npz file
@@ -91,7 +91,8 @@ def write_adam_map_fisher(config,out_map_fisher,full_params_arr,free_params_arr,
     elif config['inference_config']['fit_obs'] == True:
         prefix = 'adam_%s'%config['obs_name']
     else:
-        prefix = ''
+        # prefix = ''
+        prefix = config['output_prefix'].format(**config)
 
     ### user specified suffix 
     # TO DO: write a wrapper that generalizes this, printing par names (not just values) where requested

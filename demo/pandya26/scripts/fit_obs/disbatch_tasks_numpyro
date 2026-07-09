@@ -1,0 +1,2 @@
+#DISBATCH PREFIX chainnum=$((DISBATCH_REPEAT_INDEX)) ; ( source activate japphire ; python -m sapphire --path_config "/mnt/ceph/users/vpandya/sapphire/demo/pandya26/scripts/fit_obs/config_obs_hmc.yaml" --chain_num $chainnum ) &> numpyro_mix_chain${chainnum}.log
+#DISBATCH REPEAT 4

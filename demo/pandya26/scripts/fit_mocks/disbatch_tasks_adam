@@ -1,0 +1,2 @@
+#DISBATCH PREFIX mocknum=$((DISBATCH_REPEAT_INDEX)) ; ( source activate japphire ; python -m sapphire --path_config "/mnt/ceph/users/vpandya/sapphire/demo/pandya26/scripts/fit_mocks/config_fit_mocks.yaml" --mock_num $mocknum --rng_sample $mocknum --rng_init $((mocknum+1)) ) &> mock${mocknum}_111.log
+#DISBATCH REPEAT 100
