@@ -303,8 +303,8 @@ def run(config,custom_solver_inputs=None):
 
 
         ### this whole thing (w/ adam above) needs to be pushed down to sapphire/inference module
-        elif config['inference_config']['engine'] == 'nuts':
-            print('calling numpyro for NUTS...',flush=True)
+        elif config['inference_config']['engine'] in ['nuts','aies']:
+            print('calling numpyro...',flush=True)
 
             out_numpyro = inference.run_numpyro.setup(config,halo_index,obs_stats,batch_solve)
 
@@ -312,7 +312,7 @@ def run(config,custom_solver_inputs=None):
             out_sapphire = out_numpyro
         
         else:
-            raise ValueError('inference_config.engine must be either adam or hmc',flush=True)
+            raise ValueError('inference_config.engine must be either adam, nuts or aies',flush=True)
     
 
     ### somehow have this total runtime always print upon program exit, even if return was up above somewhere 

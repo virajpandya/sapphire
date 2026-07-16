@@ -187,14 +187,14 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
         ### April 2026 -- port over batch_jacfwd as well from old ipynb
         ### note: this is really only for runtype='single' -- 'inference' mode computes grad(loss) separately sapphire/inference/
         if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) > 1:
-            print('autodiff over multi-CPU/GPU for runtype=single',flush=True)
+            print('autodiff over multi-CPU/GPU for runtype=inference',flush=True)
             batch_jacfwd = jit(shard_map(vmap(jacfwd(autodiff_jac),in_axes=(None,0,None)),
                                         mesh=mesh,
                                         in_specs=(PartitionSpec(None),PartitionSpec('i'),PartitionSpec(None)), # shard over halo_index, not params
                                         out_specs=PartitionSpec('i'),check_rep=False)) 
             
         elif len(jax.devices('gpu')) == 1:
-            print('autodiff over single GPU for runtype=single',flush=True)
+            print('autodiff over single GPU for runtype=inference',flush=True)
             batch_jacfwd = jit(vmap(jacfwd(autodiff_jac),in_axes=(None,0,None)))
         
         return batch_solve, batch_jacfwd

@@ -69,6 +69,11 @@ fit_obs/disbatch_tasks_numpyro
 fit_obs/sub_disbatch_numpyro.sh 
 - slurm job submission script to request N nodes for N disBatch tasks defined in fit_obs/disbatch_tasks_numpyro 
 
+fit_obs/sub_aies.sh
+- slurm job submission script to request 1 GPU node to run numpyro's MCMC gradient-free affine invariant ensemble sampler (AIES)
+- to be used with fit_obs/config_obs_aies.yaml (note the inference_config:engine change from nuts to aies) 
+- this requires GPU since a single loss evaluation involves ~1K+ halos but we need >2*Nparameters walkers such evaluations
+
 
 ==========================================================================================
 

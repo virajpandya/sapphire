@@ -124,7 +124,7 @@ sampling_config:
 
 # if you want to run inference -- ONLY if runtype == 'inference' above 
 inference_config:
-    engine: 'nuts' # adam, nuts
+    engine: 'nuts' # adam, nuts, aies
     adam_logL: 'manual' # manual, numpyro; did the user define a logL manually or with a probabilistic programming language 
     Nadam: 10 # number of initial guesses / trajectories for adam
 
@@ -141,9 +141,10 @@ inference_config:
     # toggle using observational constraints and path to file
     fit_obs: True
 
-    ### numpyro HMC/NUTS options
+    ### numpyro options
     num_warmup: 1000
     num_samples: 1000
+    num_walkers: 50 # only for AIES [GPU-only]
 
 
 ####### I moved these outside inference_config to avoid deep-merging dicts 
@@ -191,7 +192,7 @@ obs_name: 'mix' # so far: manga, lit or mix
 # any {config_variable} will be pre-pended by f so variables get filled in
 # NOTE: perhaps write a script that automates generation (and/or submission of) disbatch task file
 # NOTE: perhaps add more customization options here for prefix, suffix, generic filename format, etc.
-output_path: '/mnt/ceph/users/vpandya/sapphire_outputs/' 
+output_path: '/mnt/ceph/users/vpandya/sapphire_outputs_referee/' 
 output_suffix: '{flag_smhm}{flag_fgas}{flag_mzr_gas}' 
 output_prefix: 'numpyro_{obs_name}_chain{chain_num}' # for adam, sapphire/utils/write_results.py just does adam_{obs_name}
 
