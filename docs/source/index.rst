@@ -22,7 +22,7 @@ sapphire bridges astrophysics, cosmology, numerics, dynamics and statistics in n
 Early applications for modeling galactic atmospheres and galaxy population evolution are described in `Pandya et al. (2023) <https://ui.adsabs.harvard.edu/abs/2023ApJ...956..118P/abstract>`_ and `Pandya et al. (2026) <https://ui.adsabs.harvard.edu/abs/2026arXiv260406318P/abstract>`_.
 
 .. warning::
-   This documentation is in the process of being automated with LLMs. 
+   This documentation is in the process of being auto-generated.
    
    In the meantime, see the `GitHub code <https://github.com/virajpandya/sapphire/tree/main/demo/pandya26>`_ for reproducing the analysis and figures of Pandya et al. (2026) -- this currently serves as a demo/tutorial.
 
