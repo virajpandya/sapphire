@@ -1,0 +1,5 @@
+sphinx-book-theme
+matplotlib
+numpy
+scipy
+
