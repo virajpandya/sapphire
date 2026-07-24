@@ -449,10 +449,15 @@ def setup(integrator,rhs_terms,init_state,init_time,parameters,forcing_matrix,
 
         ### there are many other combinations that can be added as needed     
 
-        if len(init_state.shape) == 1:
+        if len(init_state.shape) == 1 and len(parameters.shape) == 1:
             print('only jit, no vmap',flush=True)
             return (jit(solve_func), 
                     jit(aux_func))
+
+        if len(init_state.shape) == 1 and len(parameters.shape) > 1:
+            print('vmap over parameters but not ICs',flush=True)
+            return (jit(vmap(solve_func,in_axes=(None,None,0,None))),
+                    jit(vmap(aux_func,in_axes=(None,None,0,None))))
 
         elif len(init_state.shape) > 1 and len(parameters) == 0 and len(forcing_matrix)==0:
             print('only vmap over ICs with empty parameters/forcings',flush=True)

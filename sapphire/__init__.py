@@ -14,23 +14,8 @@ os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 
 from glob import glob
 import multiprocess
-from functools import partial 
 import numpy as np
-import pandas as pd
-import seaborn as sns
-import arviz as az
-from chainconsumer import Chain, ChainConsumer, make_sample, PlotConfig, Truth, ChainConfig
-import argparse
-import yaml
-import h5py 
 from timeit import default_timer as timer
-
-import matplotlib.pyplot as plt 
-from matplotlib.colors import Normalize
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-plt.rcParams['figure.dpi'] = 120
-plt.rcParams['ytick.right'] = True
-plt.rcParams['xtick.top'] = True
 
 # load sapphire modules that do not require dependency injection
 from sapphire.utils import read_config
