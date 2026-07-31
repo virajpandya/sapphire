@@ -1,8 +1,8 @@
 """ 
-this module defines the numpyro model and runs inference
-it is analogous to explicit_likelihood.py and run_adam.py 
+this module runs numpyro inference routines (NUTS, AIES, SVI, etc.) 
+using a pre-defined numpyro model
 
-TO DO: the numpyro model definition and running NUTS, SVI, etc. can be in separate modules
+see define_numpyro.py for an example from Pandya+26
 """
 
 from astropy import constants as const
@@ -47,195 +47,11 @@ import sapphire.summaries.gaussian_kernel_regression as gkr
 
 
 
-def setup(config,halo_index,obs_stats,batch_solve):
+def setup(config,model,model_args,params_free,savefigs=False,savenpz=False):
 
-    inference_config = config['inference_config']
-    sampling_config = config['sampling_config']
-    params_fixed_astro = config['params_fixed_astro']
-
-    # required parameter order for sapphire
-    # NOTE: change API to just use dicts throughout (care is needed for gradients)
-    full_params_order = ['A_M','alpha0_M','alphaz_M','beta_M',
-                         'A_E','alpha0_E','alphaz_E','beta_E',
-                         'A_SF','alpha0_SF','alphaz_SF','beta_SF',
-                         'A_Z','alpha0_Z','alphaz_Z','beta_Z'] 
-
-    params_bounds = sampling_config['params_bounds']
-    params_free = list(params_bounds.keys())
-    Nfree = len(params_free)
-    
-    lower_bounds = jnp.array([params_bounds[k][0] for k in params_free])
-    upper_bounds = jnp.array([params_bounds[k][1] for k in params_free])  
-
-    Lflag_smhm = config['flag_smhm'] 
-    Lflag_fgas = config['flag_fgas'] 
-    Lflag_mzr = config['flag_mzr']   
-    Lflag_sfms = config['flag_sfms']   
-    Lflag_mzr_gas = config['flag_mzr_gas']       
-
-    Nbatch = config['Nbatch']
-
-    ### unpack input observed (or mock) summary statistics
-    (obs_x0_smhm,obs_bw_smhm,obs_avg_smhm,obs_err_smhm,
-     obs_x0_fgas,obs_bw_fgas,obs_avg_fgas,obs_err_fgas,
-     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr, 
-     obs_x0_sfms,obs_bw_sfms,obs_avg_sfms,obs_err_sfms, 
-     obs_x0_mzr_gas,obs_bw_mzr_gas,obs_avg_mzr_gas,obs_err_mzr_gas) = obs_stats
-
-    ### optionally, if running in mock mode, zero out obs_errs and let user do their mock_err below [or this can be kept, if user desires]
-    if inference_config['fit_mock'] == True:
-        obs_err_smhm = 0.0
-        obs_err_fgas = 0.0
-        obs_err_mzr = 0.0
-        obs_err_sfms = 0.0
-        obs_err_mzr_gas = 0.0
-
-    # print('raw mock obs_err',obs_err_smhm,obs_err_fgas,obs_err_mzr,flush=True)
-    
-    # these are added in quadrature (should be 0 by default)
-    mock_err_smhm = config['mock_err_smhm']
-    mock_err_fgas = config['mock_err_fgas']
-    mock_err_mzr = config['mock_err_mzr']
-    mock_err_sfms = config['mock_err_sfms']
-    mock_err_mzr_gas = config['mock_err_mzr_gas']    
-        
-        
-    """ define the numpyro model """
-    
-    # note: these input obs can be different from the obs_ ones returned above
-    def model(obs_avg_smhm,obs_err_smhm,obs_avg_fgas,obs_err_fgas,obs_avg_mzr,obs_err_mzr,
-              obs_avg_sfms,obs_err_sfms,obs_avg_mzr_gas,obs_err_mzr_gas):
-        
-        ### sample the free parameters assuming their respective Uniform priors 
-        # the user should change the prior sampling function as needed...
-        params_dict = {}
-        for i, name in enumerate(params_free):
-            params_dict[name] = numpyro.sample(name,dist.Uniform(lower_bounds[i], upper_bounds[i]))
-
-        # build full parameter dict and array 
-        full_params_dict = {**params_fixed_astro, **params_dict}
-        full_params = jnp.array([full_params_dict[k] for k in full_params_order])
-        
-        full_params = full_params.at[0].set(10**full_params[0]) # 10**A_M
-        full_params = full_params.at[4].set(10**full_params[4]) # 10**A_E
-        full_params = full_params.at[8].set(10**full_params[8]) # 10**A_SF
-        full_params = full_params.at[12].set(10**full_params[12]) # 10**A_Z
-        full_params = jnp.concatenate([full_params,jnp.array([0])]) # realization #
-
-        ### for some reason with adam, Uniform hard-cutoff is not enforced
-        ### so here add a soft quadratic penalty just like i was doing manually, using numpyro.factor
-        parr = jnp.array([params_dict[name] for name in params_free])
-        lower_penalty = jnp.sum(jnp.maximum(lower_bounds - parr, 0)**2)
-        upper_penalty = jnp.sum(jnp.maximum(parr - upper_bounds, 0)**2)
-        penalty = 1e8 * Nbatch * (lower_penalty + upper_penalty) # only gradient should matter, not normalization I think
-        numpyro.factor('penalty', -penalty)
-        
-        # first call the batch solve 
-        shsol = batch_solve(halo_index, full_params)
-    
-        """ July 14 -- more compact using functions above """
-        z0_Mvir, z0_smhm, fail_flag, Nfail, z0_Mstar, z0_fgas, z0_mzr, z0_Mdot_sfr, z0_mzr_gas = gkr.extract_quantities(shsol)
-    
-        numpyro.deterministic('Nfail', Nfail)    
-    
-        ### July 24 -- evaluate now using observed x0 and bin(=band) widths
-        pred_avg_smhm, pred_err_smhm = gkr.nadaraya_watson(z0_Mvir, z0_smhm, obs_x0_smhm, obs_bw_smhm)
-        pred_avg_fgas, pred_err_fgas = gkr.nadaraya_watson(z0_Mstar, z0_fgas, obs_x0_fgas, obs_bw_fgas)
-        # pred_avg_mzr, pred_err_mzr = gkr.nadaraya_watson(z0_Mstar, z0_mzr, obs_x0_mzr, obs_bw_mzr) 
-        # pred_avg_sfms, pred_err_sfms = gkr.nadaraya_watson(z0_Mstar, z0_Mdot_sfr, obs_x0_sfms, obs_bw_sfms) 
-        pred_avg_mzr_gas, pred_err_mzr_gas = gkr.nadaraya_watson(z0_Mstar, z0_mzr_gas, obs_x0_mzr_gas, obs_bw_mzr_gas) 
-    
-        """ July 24 -- quadrature sum intrinsic model standard error with observed uncertainty """ 
-        ### NEED TO UPDATE THIS TO GENERALLY HANDLE MOCKED OR ACTUAL OBSERVED EXTRA ERROR 
-        tot_err_smhm = jnp.sqrt(pred_err_smhm**2 + obs_err_smhm**2 + mock_err_smhm**2) 
-        tot_err_fgas = jnp.sqrt(pred_err_fgas**2 + obs_err_fgas**2 + mock_err_fgas**2) 
-        # tot_err_mzr = jnp.sqrt(pred_err_mzr**2 + obs_err_mzr**2 + mock_err_mzr**2) 
-        # tot_err_sfms = jnp.sqrt(pred_err_sfms**2 + obs_err_sfms**2 + mock_err_sfms**2) 
-        tot_err_mzr_gas = jnp.sqrt(pred_err_mzr_gas**2 + obs_err_mzr_gas**2 + mock_err_mzr_gas**2) 
-
-        # to save as part of outputs 
-        numpyro.deterministic('pred_avg_smhm',pred_avg_smhm)
-        numpyro.deterministic('pred_avg_fgas',pred_avg_fgas)
-        # numpyro.deterministic('pred_avg_mzr',pred_avg_mzr)
-        # numpyro.deterministic('pred_avg_sfms',pred_avg_sfms)
-        numpyro.deterministic('pred_avg_mzr_gas',pred_avg_mzr_gas)
-        
-        numpyro.deterministic('pred_err_smhm',pred_err_smhm)
-        numpyro.deterministic('pred_err_fgas',pred_err_fgas)
-        # numpyro.deterministic('pred_err_mzr',pred_err_mzr)    
-        # numpyro.deterministic('pred_err_sfms',pred_err_sfms)    
-        numpyro.deterministic('pred_err_mzr_gas',pred_err_mzr_gas)            
-        
-        if obs_avg_smhm is None: # for prior and posterior predictive checks
-    
-            numpyro.sample('obs_smhm',dist.Normal(pred_avg_smhm,tot_err_smhm)) 
-            numpyro.sample('obs_fgas',dist.Normal(pred_avg_fgas,tot_err_fgas)) 
-            numpyro.sample('obs_mzr',dist.Normal(pred_avg_mzr,tot_err_mzr)) 
-            numpyro.sample('obs_sfms',dist.Normal(pred_avg_sfms,tot_err_sfms)) 
-            numpyro.sample('obs_mzr_gas',dist.Normal(pred_avg_mzr_gas,tot_err_mzr_gas))  
-            
-        else:
-    
-            # sample gaussian likelihoods independently (these will be internally summed by numpyro like we'd do manually)
-            # May 15 -- only compute each logL if requested based on command line argument
-            if Lflag_smhm:
-                obs_smhm = numpyro.sample('obs_smhm',dist.Normal(pred_avg_smhm,tot_err_smhm), obs=obs_avg_smhm)
-            
-            if Lflag_fgas:
-                obs_fgas = numpyro.sample('obs_fgas',dist.Normal(pred_avg_fgas,tot_err_fgas), obs=obs_avg_fgas)
-    
-            if Lflag_mzr: 
-                obs_mzr = numpyro.sample('obs_mzr',dist.Normal(pred_avg_mzr,tot_err_mzr), obs=obs_avg_mzr)
-
-            if Lflag_sfms: 
-                obs_sfms = numpyro.sample('obs_sfms',dist.Normal(pred_avg_sfms,tot_err_sfms), obs=obs_avg_sfms)
-
-            if Lflag_mzr_gas: 
-                obs_mzr_gas = numpyro.sample('obs_mzr_gas',dist.Normal(pred_avg_mzr_gas,tot_err_mzr_gas), obs=obs_avg_mzr_gas)    
-                
-
-    # in case we want to compute loss for adam based on numpyro model
-    # this hard-codes the input obs constraint as inputs to numpyro model() function
-    @jit
-    def numpyro_loss(params):
-        # numpyro.infer.util.log_density returns (log_density, aux) tuple.
-        logp, _ = numpyro.infer.util.log_density(model, 
-                                                 (obs_avg_smhm,obs_err_smhm,
-                                                  obs_avg_fgas,obs_err_fgas,
-                                                  obs_avg_mzr,obs_err_mzr,
-                                                  obs_avg_sfms,obs_err_sfms,
-                                                  obs_avg_mzr_gas,obs_err_mzr_gas, ), 
-                                                 {}, params)
-        
-        # take negative of numpyro log-posterior so it is a loss for adam
-        return -logp    
-
-    # if requested, just return numpyro loss function but don't do any inference
-    if inference_config['engine'] == 'adam' and inference_config['adam_logL'] == 'numpyro':
-        return numpyro_loss
-
-
-    ########### before proceeding, benchmark jit-time and post-jit runtime so we know what to expect 
-    test_keys = jax.random.split(key(config['rng_init']), len(params_bounds))
-    test_params = {name: jax.random.uniform(k,shape=(),minval=lower,maxval=upper)
-                   for k, (name, (lower, upper)) in zip(test_keys, params_bounds.items())}
-
-    tstart = timer()
-    test_loss = numpyro_loss(test_params).block_until_ready()
-    print('jit numpyro loss_fn took %.3f sec with value=%.3f'%(timer()-tstart,test_loss),flush=True)
-
-    tstart = timer()
-    test_loss = numpyro_loss(test_params).block_until_ready()
-    print('post-jit numpyro loss_fn took %.3f sec with value=%.3f'%(timer()-tstart,test_loss),flush=True)    
-    
-
-    
+    inference_config = config['inference_config']    
 
     ##### Otherwise proceed with numpyro inference with a wrapper that takes input chain_num
-
-    ### TO DO: push this output filename stuff down to utils/write_results or somewhere
-    prefix = config['output_prefix'].format(**config) # typically numpyro_{obs_name}_{chain_num}
-    suffix = config['output_suffix'].format(**config) # typically {flag}{flag}{flag}
 
     def run_nuts(chain_num):
 
@@ -253,8 +69,7 @@ def setup(config,halo_index,obs_stats,batch_solve):
         # Feb 4 -- make RNG chain_num so every chain combo has different initialization... 
         # TO DO: for mocks, put back in dependence on mock_num+chain_num for 
         mcmc.warmup(key(chain_num+22), # random int offset just in case.. 
-                    obs_avg_smhm,obs_err_smhm,obs_avg_fgas,obs_err_fgas,obs_avg_mzr,obs_err_mzr,
-                    obs_avg_sfms,obs_err_sfms,obs_avg_mzr_gas,obs_err_mzr_gas,
+                    *model_args,
                     collect_warmup=True,
                     extra_fields=('i','z','z_grad','potential_energy','energy','r','num_steps',
                     'adapt_state.step_size','adapt_state.inverse_mass_matrix',))
@@ -274,37 +89,41 @@ def setup(config,halo_index,obs_stats,batch_solve):
         
         warmup_samples_df = pd.DataFrame(warmup_samples_dict)
         # print(warmup_samples_df,flush=True)
-        
-        c = ChainConsumer()
-        
-        c.add_chain(Chain(samples=warmup_samples_df, name="An Example Contour"))
 
-        # TO DO: change this to use user-provided prior limits
-        c.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
-                                                    'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
-                                                    'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
-                                                    'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1),},
-                                            labels={'A_M':r'$A_M$','alpha0_M':r'$\alpha_M^0$',
-                                                    'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
-                                                    'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
-                                                    'A_Z':r'$A_Z$','alpha0_Z':r'$\alpha_Z^0$'},
-                                            label_font_size=16))
-        
-        fig = c.plotter.plot()
+        if savefigs is True:
+            c = ChainConsumer()
+            
+            c.add_chain(Chain(samples=warmup_samples_df, name="An Example Contour"))
+    
+            # TO DO: change this to use user-provided prior limits
+            c.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
+                                                        'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
+                                                        'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
+                                                        'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1),},
+                                                labels={'A_M':r'$A_M$','alpha0_M':r'$\alpha_M^0$',
+                                                        'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
+                                                        'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
+                                                        'A_Z':r'$A_Z$','alpha0_Z':r'$\alpha_Z^0$'},
+                                                label_font_size=16))
+            
+            fig = c.plotter.plot()
 
-        # TO DO: move this fname (w/ prefix and suffix) to utils
-        fname = os.path.join(config['output_path'],'figures','%s_%s_corner_warmup.png'%(prefix,suffix))
-        plt.savefig(fname,bbox_inches='tight',dpi=300,facecolor='w')
-        print('saved %s'%fname,flush=True)
-        
+            ### TO DO: push this output filename stuff down to utils/write_results or somewhere
+            prefix = config['output_prefix'].format(**config) # typically numpyro_{obs_name}_{chain_num}
+            suffix = config['output_suffix'].format(**config) # typically {flag}{flag}{flag}
+            
+            # TO DO: move this fname (w/ prefix and suffix) to utils
+            fname = os.path.join(config['output_path'],'figures','%s_%s_corner_warmup.png'%(prefix,suffix))
+            plt.savefig(fname,bbox_inches='tight',dpi=300,facecolor='w')
+            print('saved %s'%fname,flush=True)
+            
         
         # now run actual sampling phase
         mcmc.post_warmup_state = mcmc.last_state
         mcmc.run(mcmc.post_warmup_state.rng_key,
-                obs_avg_smhm,obs_err_smhm,obs_avg_fgas,obs_err_fgas,obs_avg_mzr,obs_err_mzr,
-                 obs_avg_sfms,obs_err_sfms,obs_avg_mzr_gas,obs_err_mzr_gas,
-                extra_fields=('i','z','z_grad','potential_energy','energy','r','num_steps',
-                            'adapt_state.step_size','adapt_state.inverse_mass_matrix',))    
+                 *model_args,
+                 extra_fields=('i','z','z_grad','potential_energy','energy','r','num_steps',
+                               'adapt_state.step_size','adapt_state.inverse_mass_matrix',))    
         
         samples = mcmc.get_samples()  
         samples_extra_fields = mcmc.get_extra_fields()
@@ -315,31 +134,31 @@ def setup(config,halo_index,obs_stats,batch_solve):
         samples_dict = {k: samples[k] for k in params_free}
         samples_df = pd.DataFrame(samples_dict)
         
+        if savefigs is True:
         
-        c = ChainConsumer()
-        
-        c.add_chain(Chain(samples=samples_df, name="An Example Contour"))
-        
-        c.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
-                                                    'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
-                                                    'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
-                                                    'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1),},
-                                            labels={'A_M':r'$A_M$','alpha0_M':r'$\alpha_M^0$',
-                                                    'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
-                                                    'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
-                                                    'A_Z':r'$A_Z$','alpha0_Z':r'$\alpha_Z^0$'},
-                                            label_font_size=16))
-        
-        fig = c.plotter.plot()
-
-        fname = os.path.join(config['output_path'],'figures','%s_%s_corner_samples.png'%(prefix,suffix))
-        plt.savefig(fname,bbox_inches='tight',dpi=300,facecolor='w')
-        print('saved %s'%fname,flush=True)
-
-        plt.close('all')
+            c = ChainConsumer()
+            
+            c.add_chain(Chain(samples=samples_df, name="An Example Contour"))
+            
+            c.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
+                                                        'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
+                                                        'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
+                                                        'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1),},
+                                                labels={'A_M':r'$A_M$','alpha0_M':r'$\alpha_M^0$',
+                                                        'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
+                                                        'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
+                                                        'A_Z':r'$A_Z$','alpha0_Z':r'$\alpha_Z^0$'},
+                                                label_font_size=16))
+            
+            fig = c.plotter.plot()
+    
+            fname = os.path.join(config['output_path'],'figures','%s_%s_corner_samples.png'%(prefix,suffix))
+            plt.savefig(fname,bbox_inches='tight',dpi=300,facecolor='w')
+            print('saved %s'%fname,flush=True)
+    
+            plt.close('all')
 
         return warmup_samples,warmup_extra_fields,samples,samples_extra_fields
-
 
 
     def run_aies(num_walkers=50):
@@ -353,8 +172,7 @@ def setup(config,halo_index,obs_stats,batch_solve):
         # Feb 4 -- make RNG chain_num so every chain combo has different initialization... 
         # TO DO: for mocks, put back in dependence on mock_num+chain_num for 
         mcmc.warmup(key(config['rng_init']), # random int offset just in case.. 
-                    obs_avg_smhm,obs_err_smhm,obs_avg_fgas,obs_err_fgas,obs_avg_mzr,obs_err_mzr,
-                    obs_avg_sfms,obs_err_sfms,obs_avg_mzr_gas,obs_err_mzr_gas,
+                    *model_args,
                     collect_warmup=True,)
         
         warmup_samples = mcmc.get_samples()    
@@ -372,35 +190,36 @@ def setup(config,halo_index,obs_stats,batch_solve):
         
         warmup_samples_df = pd.DataFrame(warmup_samples_dict)
         # print(warmup_samples_df,flush=True)
-        
-        c = ChainConsumer()
-        
-        c.add_chain(Chain(samples=warmup_samples_df, name="An Example Contour"))
 
-        # TO DO: change this to use user-provided prior limits
-        c.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
-                                                    'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
-                                                    'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
-                                                    'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1),},
-                                            labels={'A_M':r'$A_M$','alpha0_M':r'$\alpha_M^0$',
-                                                    'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
-                                                    'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
-                                                    'A_Z':r'$A_Z$','alpha0_Z':r'$\alpha_Z^0$'},
-                                            label_font_size=16))
+        if savefigs is True:
         
-        fig = c.plotter.plot()
-
-        # TO DO: move this fname (w/ prefix and suffix) to utils
-        fname = os.path.join(config['output_path'],'figures','%s_%s_corner_warmup.png'%(prefix,suffix))
-        plt.savefig(fname,bbox_inches='tight',dpi=300,facecolor='w')
-        print('saved %s'%fname,flush=True)
+            c = ChainConsumer()
+            
+            c.add_chain(Chain(samples=warmup_samples_df, name="An Example Contour"))
+    
+            # TO DO: change this to use user-provided prior limits
+            c.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
+                                                        'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
+                                                        'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
+                                                        'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1),},
+                                                labels={'A_M':r'$A_M$','alpha0_M':r'$\alpha_M^0$',
+                                                        'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
+                                                        'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
+                                                        'A_Z':r'$A_Z$','alpha0_Z':r'$\alpha_Z^0$'},
+                                                label_font_size=16))
+            
+            fig = c.plotter.plot()
+    
+            # TO DO: move this fname (w/ prefix and suffix) to utils
+            fname = os.path.join(config['output_path'],'figures','%s_%s_corner_warmup.png'%(prefix,suffix))
+            plt.savefig(fname,bbox_inches='tight',dpi=300,facecolor='w')
+            print('saved %s'%fname,flush=True)
         
         
         # now run actual sampling phase
         mcmc.post_warmup_state = mcmc.last_state
         mcmc.run(mcmc.post_warmup_state.rng_key,
-                obs_avg_smhm,obs_err_smhm,obs_avg_fgas,obs_err_fgas,obs_avg_mzr,obs_err_mzr,
-                 obs_avg_sfms,obs_err_sfms,obs_avg_mzr_gas,obs_err_mzr_gas)
+                 *model_args,)
         
         samples = mcmc.get_samples()  
         samples_extra_fields = mcmc.get_extra_fields()
@@ -411,28 +230,29 @@ def setup(config,halo_index,obs_stats,batch_solve):
         samples_dict = {k: samples[k] for k in params_free}
         samples_df = pd.DataFrame(samples_dict)
         
-        
-        c = ChainConsumer()
-        
-        c.add_chain(Chain(samples=samples_df, name="An Example Contour"))
-        
-        c.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
-                                                    'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
-                                                    'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
-                                                    'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1),},
-                                            labels={'A_M':r'$A_M$','alpha0_M':r'$\alpha_M^0$',
-                                                    'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
-                                                    'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
-                                                    'A_Z':r'$A_Z$','alpha0_Z':r'$\alpha_Z^0$'},
-                                            label_font_size=16))
-        
-        fig = c.plotter.plot()
-
-        fname = os.path.join(config['output_path'],'figures','%s_%s_corner_samples.png'%(prefix,suffix))
-        plt.savefig(fname,bbox_inches='tight',dpi=300,facecolor='w')
-        print('saved %s'%fname,flush=True)
-
-        plt.close('all')
+        if savefigs is True:
+            
+            c = ChainConsumer()
+            
+            c.add_chain(Chain(samples=samples_df, name="An Example Contour"))
+            
+            c.set_plot_config(PlotConfig(extents={'A_M':(-2.1,1.1),'alpha0_M':(-4.1,0.1),
+                                                        'A_E':(-2.1,0.1),'alpha0_E':(-4.1,0.1),
+                                                        'A_SF':(-0.1,1.2),'alpha0_SF':(-4.1,0.1),
+                                                        'A_Z':(-2.1,0.1),'alpha0_Z':(-4.1,0.1),},
+                                                labels={'A_M':r'$A_M$','alpha0_M':r'$\alpha_M^0$',
+                                                        'A_E':r'$A_E$','alpha0_E':r'$\alpha_E^0$',
+                                                        'A_SF':r'$A_{\rm SF}$','alpha0_SF':r'$\alpha_{\rm SF}^0$',
+                                                        'A_Z':r'$A_Z$','alpha0_Z':r'$\alpha_Z^0$'},
+                                                label_font_size=16))
+            
+            fig = c.plotter.plot()
+    
+            fname = os.path.join(config['output_path'],'figures','%s_%s_corner_samples.png'%(prefix,suffix))
+            plt.savefig(fname,bbox_inches='tight',dpi=300,facecolor='w')
+            print('saved %s'%fname,flush=True)
+    
+            plt.close('all')
 
         return warmup_samples,warmup_extra_fields,samples,samples_extra_fields    
 
@@ -444,47 +264,25 @@ def setup(config,halo_index,obs_stats,batch_solve):
     elif inference_config['engine'] == 'aies':
         out_numpyro = run_aies(inference_config['num_walkers'])
 
-    warmup_samples,warmup_extra_fields,samples,samples_extra_fields = out_numpyro
 
-    ##### Save output 
-    # TO DO: bring back filename prefix/suffix (and push that to utils)
-    fname = os.path.join(config['output_path'],'outputs','%s_%s.npz'%(prefix,suffix))
-
-    # TO DO: move this to utils/write_results.py 
-    jnp.savez(fname,
-              warmup_samples = warmup_samples,
-              warmup_extra_fields = warmup_extra_fields,
-              samples = samples,
-              samples_extra_fields = samples_extra_fields,
-              Lflag_smhm=Lflag_smhm,
-              Lflag_fgas=Lflag_fgas,
-              Lflag_mzr=Lflag_mzr,
-              Lflag_sfms=Lflag_sfms,
-              Lflag_mzr_gas=Lflag_mzr_gas,
-              # save obs_stats in case it was changed for forecasting -- for easier predictive plots
-              obs_x0_smhm=obs_x0_smhm,
-              obs_bw_smhm=obs_bw_smhm,
-              obs_avg_smhm=obs_avg_smhm,
-              obs_err_smhm=obs_err_smhm,
-              obs_x0_fgas=obs_x0_fgas,
-              obs_bw_fgas=obs_bw_fgas,
-              obs_avg_fgas=obs_avg_fgas,
-              obs_err_fgas=obs_err_fgas,
-              obs_x0_mzr=obs_x0_mzr,
-              obs_bw_mzr=obs_bw_mzr,
-              obs_avg_mzr=obs_avg_mzr,
-              obs_err_mzr=obs_err_mzr,
-              obs_x0_sfms=obs_x0_sfms,
-              obs_bw_sfms=obs_bw_sfms,
-              obs_avg_sfms=obs_avg_sfms,
-              obs_err_sfms=obs_err_sfms,
-              obs_x0_mzr_gas=obs_x0_mzr_gas,
-              obs_bw_mzr_gas=obs_bw_mzr_gas,
-              obs_avg_mzr_gas=obs_avg_mzr_gas,
-              obs_err_mzr_gas=obs_err_mzr_gas,                  
-              config=config)
+    if savenpz is True:
+        
+        warmup_samples,warmup_extra_fields,samples,samples_extra_fields = out_numpyro
     
-    print('saved %s'%fname,flush=True)
+        ##### Save output 
+        # TO DO: bring back filename prefix/suffix (and push that to utils)
+        fname = os.path.join(config['output_path'],'outputs','%s_%s.npz'%(prefix,suffix))
+    
+        # TO DO: move this to utils/write_results.py 
+        jnp.savez(fname,
+                  warmup_samples = warmup_samples,
+                  warmup_extra_fields = warmup_extra_fields,
+                  samples = samples,
+                  samples_extra_fields = samples_extra_fields,
+                  model_args = model_args, # this used to be called obs_stats (useful for predictive check plots) 
+                  config=config)
+        
+        print('saved %s'%fname,flush=True)
     
 
     return out_numpyro

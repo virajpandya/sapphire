@@ -291,7 +291,9 @@ def run(config,custom_solver_inputs=None):
         elif config['inference_config']['engine'] in ['nuts','aies']:
             print('calling numpyro...',flush=True)
 
-            out_numpyro = inference.run_numpyro.setup(config,halo_index,obs_stats,batch_solve)
+            # out_numpyro = inference.run_numpyro.setup(config,halo_index,obs_stats,batch_solve)
+            numpyro_model, numpyro_model_args, numpyro_params_free = inference.define_numpyro.setup(config,halo_index,obs_stats,batch_solve)
+            out_numpyro = inference.run_numpyro.setup(config,numpyro_model,numpyro_model_args,numpyro_params_free,savefigs=True)
 
             # TO DO: fix general out for interactive analysis
             out_sapphire = out_numpyro
