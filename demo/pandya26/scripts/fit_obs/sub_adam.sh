@@ -11,4 +11,4 @@
 source /mnt/home/vpandya/.bashrc
 source activate japphire
 
-python -m sapphire --path_config "/mnt/ceph/users/vpandya/sapphire/demo/pandya26/scripts/fit_obs/config_obs_adam.yaml" &> adam_obs_111.log
+python -m sapphire --path_config "/mnt/ceph/users/vpandya/sapphire/demo/pandya26/scripts/fit_obs/config_obs_adam.yaml" --rng_init 1 &> adam_obs_111.log

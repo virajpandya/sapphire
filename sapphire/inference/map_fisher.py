@@ -32,7 +32,7 @@ import optax
 
 
 ### NOTE: this currently not only computes MAP/Fisher but also packages and returns trace, etc. for saving -- move that to utils?
-def from_adam(config,hess_loss_func,out_adam,true_params):
+def from_adam(config,hess_loss_func,out_adam,true_params,obs_stats):
 
     sampling_config = config['sampling_config']
     params_bounds = sampling_config['params_bounds']
@@ -51,7 +51,7 @@ def from_adam(config,hess_loss_func,out_adam,true_params):
     def compute_hessians(final_params):
         ### final_params = shape (Nguess, Nparams)
         
-        hess_arr = hess_loss_func(final_params)
+        hess_arr = hess_loss_func(final_params,obs_stats)
 
         # if all eigvalsh are positive, then this is a minimum (if not, its saddle or max)
         hess_flag = jnp.all(jnp.linalg.eigvalsh(hess_arr)>0) 
@@ -118,7 +118,7 @@ def from_adam(config,hess_loss_func,out_adam,true_params):
     ### if mock mode, compute Finv at truth
     if config['inference_config']['fit_mock'] is True:
 
-        hess_true_arr = hess_loss_func(true_params)
+        hess_true_arr = hess_loss_func(true_params,obs_stats)
 
         # if all eigvalsh are positive, then this is a minimum (if not, its saddle or max)
         hess_true_flag = jnp.all(jnp.linalg.eigvalsh(hess_true_arr)>0) 

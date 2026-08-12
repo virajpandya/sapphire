@@ -47,7 +47,7 @@ return_sensitivity_jacobians: False
 
 ### moving these outside to prevent complicated nested dict merge 
 rng_sample: 1 # RNG key used for sampling 
-rng_init: 1 # rng key for samplers for reproducibility 
+rng_init: 0 # rng key for samplers for reproducibility 
 rng_halos: 3 # rng key for subsampling random halos 
 
 ### whether to run the initial solver again post-jit to benchmark runtime

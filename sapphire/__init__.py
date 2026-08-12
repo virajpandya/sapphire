@@ -95,6 +95,21 @@ def run(config,custom_solver_inputs=None):
         from sapphire.utils import benchmark_runtime
         out_sapphire = benchmark_runtime.start(config,batch_solve,halo_index,full_params_arr,free_params_arr)
 
+    if config['runtype'] == 'finitediff':
+        ### return everything needed for utils/finitediff_gradients so user can call those modules themselves 
+        print('returning everything needed for utils/finitediff_gradients module',flush=True)
+
+        ### this is clunky but since solver_setup is lightning fast, generate it twice for tol_ode=1e-8 and tol_ode=1e-12
+        config['solver_config']['rtol'] = 1e-8
+        config['solver_config']['atol'] = 1e-8
+        batch_solve8 = solver.setup(config,integrator,saveat_fn,halo_matrix,halo_coeff_matrix,halo_tinit,ts_interp)
+
+        config['solver_config']['rtol'] = 1e-12
+        config['solver_config']['atol'] = 1e-12
+        batch_solve12 = solver.setup(config,integrator,saveat_fn,halo_matrix,halo_coeff_matrix,halo_tinit,ts_interp)        
+        
+        out_sapphire = (config,halo_index,halo_matrix,batch_solve8,batch_solve12) 
+
 
     ##### modularize the following (especially runtype=inference with engine=nuts)
     
@@ -209,7 +224,7 @@ def run(config,custom_solver_inputs=None):
             print('setting up model for adam...',flush=True)
     
             ### should push this down to sapphire.inference based on config, for explicit or ILI etc. 
-            loss_func, grad_loss_func, hess_loss_func = inference.explicit_likelihood.setup(config,halo_index,obs_stats,batch_solve)
+            loss_func, grad_loss_func, hess_loss_func = inference.explicit_likelihood.setup(config,halo_index,batch_solve)
     
             ### push this down to sapphire.utils or a new inference.coverage module or something 
             
@@ -221,31 +236,31 @@ def run(config,custom_solver_inputs=None):
             if inference_config['fit_mock'] is True:
                 
                 tstart = timer()
-                true_loss = loss_func(true_params)
+                true_loss = loss_func(true_params,obs_stats)
                 tjit_loss = timer()-tstart
 
                 tstart = timer()
-                true_loss = loss_func(true_params)
+                true_loss = loss_func(true_params,obs_stats)
                 tloss = timer()-tstart
     
                 print('true loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_loss,tjit_loss,tloss),flush=True)
     
                 tstart = timer()
-                true_grad_loss = grad_loss_func(true_params)
+                true_grad_loss = grad_loss_func(true_params,obs_stats)
                 tjit_grad = timer()-tstart
 
                 tstart = timer()
-                true_grad_loss = grad_loss_func(true_params)
+                true_grad_loss = grad_loss_func(true_params,obs_stats)
                 tgrad = timer()-tstart            
                 
                 print('true grad loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_grad_loss,tjit_grad,tgrad),flush=True)
     
                 tstart = timer()
-                true_hess_loss = hess_loss_func(true_params)
+                true_hess_loss = hess_loss_func(true_params,obs_stats)
                 tjit_hess = timer()-tstart
 
                 tstart = timer()
-                true_hess_loss = hess_loss_func(true_params)
+                true_hess_loss = hess_loss_func(true_params,obs_stats)
                 thess = timer()-tstart            
                 
                 print('true hess loss=%s, jit %.5f sec, post-jit %.5f sec'%(true_hess_loss,tjit_hess,thess),flush=True)
@@ -260,10 +275,10 @@ def run(config,custom_solver_inputs=None):
         
             print('calling adam for MAP+Fisher...',flush=True)
 
-            out_adam = inference.run_adam.setup(config,loss_func,grad_loss_func)
+            out_adam = inference.run_adam.setup(config,loss_func,grad_loss_func,obs_stats)
 
             ### compute MAP and fisher/covariance matrix
-            out_map_fisher = inference.map_fisher.from_adam(config,hess_loss_func,out_adam,true_params)
+            out_map_fisher = inference.map_fisher.from_adam(config,hess_loss_func,out_adam,true_params,obs_stats)
 
             ### compute posterior predictive checks at MAP 
             post_preds_map = inference.posterior_predictive_checks.adam_map_fisher(config,obs_stats,out_map_fisher,

@@ -202,12 +202,12 @@ def posterior_samples(config):
     
     # get Nsamples random draws from posterior 
     # must be integer multuple of num_cpus or num_gpus
-    if config['runtype'] == 'sampling':
+    if config['runtype'] in ['sampling','finitediff']:
         Nsamples = sampling_config['Nsamples'] 
     elif config['runtype'] == 'single':
         Nsamples = 1
     else:
-        raise ValueError('for posterior sampling, runtype must be sampling or single')
+        raise ValueError('for posterior sampling, runtype must be sampling or single or finitediff')
     rand_samples_df = samples_df.sample(Nsamples,random_state=int(config['rng_sample'])) 
     rand_samples_dict = rand_samples_df.to_dict(orient='list') 
     
@@ -254,10 +254,6 @@ def posterior_samples(config):
 
 
 def get(config):
-
-    # TO DO: move this elsewhere (probably to utils/read_config.py)
-    if config['runtype'] not in ['single','sampling','inference','benchmark']:
-        raise ValueError('config.runtype must be one of single, sampling, inference, interactive')
     
     sampling_config = config['sampling_config']
     inference_config = config['inference_config'] 
@@ -270,10 +266,10 @@ def get(config):
     elif config['runtype'] == 'inference' and inference_config['random_mock']==True:
         return single_random(config)
     
-    elif config['runtype'] in ['sampling','benchmark'] and sampling_config['method'] == 'latin_hypercube': 
+    elif (config['runtype'] in ['sampling','benchmark'] and sampling_config['method'] == 'latin_hypercube') or (config['runtype']=='finitediff'): 
         return latin_hypercube_sampling(config)
 
-    elif config['runtype'] in ['single','sampling'] and sampling_config['method'] == 'posterior':
+    elif config['runtype'] in ['single','sampling','finitediff'] and sampling_config['method'] == 'posterior':
         return posterior_samples(config)
 
     else:

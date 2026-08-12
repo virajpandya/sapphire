@@ -171,8 +171,8 @@ shift_mzr_gas: 0.0
 
 ### re-scaling of fiducial observational errors (different from mock_err_XXX above since this multiplies instead of quad-summing)
 # default should be 1.0 so input obs errors remain as-is  [applied in read_obs.py]
-scale_err_smhm: 0.1
-scale_err_fgas: 0.1
+scale_err_smhm: 1.0
+scale_err_fgas: 1.0
 scale_err_mzr: 1.0 
 scale_err_sfms: 1.0 
 scale_err_mzr_gas: 0.1

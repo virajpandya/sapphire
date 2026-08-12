@@ -31,7 +31,7 @@ from jax.sharding import Mesh, PartitionSpec, NamedSharding
 import optax
 
 
-def setup(config,loss_func,grad_loss_func,loss_and_grad_func=None):
+def setup(config,loss_func,grad_loss_func,obs_stats,loss_and_grad_func=None):
     """ 
     July 24 2025 -- vmap on single GPU, otherwise sequential on CPU (not enough cores)
     NOTE: this should be updated to use shard_map for multi-GPU 
@@ -48,7 +48,7 @@ def setup(config,loss_func,grad_loss_func,loss_and_grad_func=None):
     
     ### generate initial guess
     base_key = jax.random.key(int(config['rng_init']))
-    init_keys = jax.random.split(base_key, len(list(params_bounds.keys()))) 
+    init_keys = jax.random.split(base_key, len(list(params_bounds.keys())))
     
     # generate init param dict
     # the conditional for shape makes it easier to deal with single guess (no need to access [0]) -- can be generalized later
@@ -68,9 +68,10 @@ def setup(config,loss_func,grad_loss_func,loss_and_grad_func=None):
     ### June 2026 -- minimal wrapper that returns both loss and grad(loss) if needed
     if loss_and_grad_func is None:
 
-        @jit # assumes loss and grad funcs are already jitted and/or jit-compatible...
-        def loss_and_grad_func(params):
-            return loss_func(params), grad_loss_func(params)
+        # assumes loss and grad funcs are already jitted and/or jit-compatible...
+        @jit
+        def loss_and_grad_func(params,obs_stats):
+            return loss_func(params,obs_stats), grad_loss_func(params,obs_stats)
     
 
     def run_adam_while(init_params,loss_and_grad_func):
@@ -97,7 +98,7 @@ def setup(config,loss_func,grad_loss_func,loss_and_grad_func=None):
         opt_state = optimizer.init(init_params)
         
         # initialize loss for jax.lax.while_loop
-        loss0, grad0 = loss_and_grad_func(init_params)
+        loss0, grad0 = loss_and_grad_func(init_params,obs_stats)
         # print('loss0',loss0,flush=True)
     
         # allocate (max_loops, Nfree) trace arrays
@@ -123,7 +124,7 @@ def setup(config,loss_func,grad_loss_func,loss_and_grad_func=None):
              trace_params,trace_loss,trace_grads,trace_updatenorm,trace_dlogL) = state
             
             # eval loss and grad loss
-            loss, grads = loss_and_grad_func(params)
+            loss, grads = loss_and_grad_func(params,obs_stats)
 
             # apply updates to parameters based on adam grad transforms
             updates, opt_state = optimizer.update(grads, opt_state, params)

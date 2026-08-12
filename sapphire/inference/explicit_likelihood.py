@@ -31,7 +31,12 @@ from jax.sharding import Mesh, PartitionSpec, NamedSharding
 import sapphire.summaries.gaussian_kernel_regression as gkr
 from . import run_numpyro # in case user requests numpyro-based loss
 
-def setup(config,minibatch_halo_index,obs_stats,batch_solve):
+"""
+August 10, 2026: 
+obs_stats is now an explicit input to log_likelihood, so will be passed to run_adam and map_fisher, not here in setup().
+Moving forward likelihoods will be externally defined anyway so this is just for Pandya+26 legacy purposes.
+"""
+def setup(config,minibatch_halo_index,batch_solve):
 
     inference_config = config['inference_config']
     sampling_config = config['sampling_config']
@@ -58,15 +63,6 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
     Lflag_mzr_gas = config['flag_mzr_gas']  
 
     Nbatch = config['Nbatch']
-
-    ### unpack input observed (or mock) summary statistics
-    (obs_x0_smhm,obs_bw_smhm,obs_avg_smhm,obs_err_smhm,
-     obs_x0_fgas,obs_bw_fgas,obs_avg_fgas,obs_err_fgas,
-     obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr, 
-     obs_x0_sfms,obs_bw_sfms,obs_avg_sfms,obs_err_sfms, 
-     obs_x0_mzr_gas,obs_bw_mzr_gas,obs_avg_mzr_gas,obs_err_mzr_gas) = obs_stats
-
-    # print('raw mock obs_err',obs_err_smhm,obs_err_fgas,obs_err_mzr,flush=True)
     
     # these are added in quadrature (should be 0 by default)
     mock_err_smhm = config['mock_err_smhm']
@@ -76,12 +72,12 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
     mock_err_mzr_gas = config['mock_err_mzr_gas']
 
     ### optionally, if running in mock mode, zero out obs_errs and let user do their mock_err below [or this can be kept, if user desires]
-    if inference_config['fit_mock'] == True:
-        obs_err_smhm = 0.0
-        obs_err_fgas = 0.0
-        obs_err_mzr = 0.0
-        obs_err_sfms = 0.0
-        obs_err_mzr_gas = 0.0
+    # if inference_config['fit_mock'] == True:
+    #     obs_err_smhm = 0.0
+    #     obs_err_fgas = 0.0
+    #     obs_err_mzr = 0.0
+    #     obs_err_sfms = 0.0
+    #     obs_err_mzr_gas = 0.0
     
     # uniform prior
     # @jit
@@ -101,13 +97,15 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
     
     # print('log_prior(test_params)',log_prior(test_params),flush=True)
     
-    ### independent (iid) gaussian log-L 
-    # @jit
-    def compute_logL(batch_params):
+    ### independent (iid) gaussian log-L
+
+    @jit
+    def compute_logL(batch_params, obs_stats):
         """ 
         batch_params = params to be passed to batch_solve 
         extra arguments are for likelihood parameters, observables, etc. 
             smhm_sigma = constant or Mhalo/redshift dependent uncertainty in log10(SMHM) [dex]
+        obs_stats = input data required to compute loss relative to predictions
     
         Nov 15 -- for optimization purposes, some parameters are assumed to be log10 to prevent negatives 
         Nov 16 -- if not fitting to different redshifts, fix redshift dependent parameters 
@@ -115,13 +113,20 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
     
         """ July 24 -- for automatic 6 and 4 parameter case, can't hard-code batch_params index numbers """
 
+        ### unpack input observed (or mock) summary statistics
+        (obs_x0_smhm,obs_bw_smhm,obs_avg_smhm,obs_err_smhm,
+         obs_x0_fgas,obs_bw_fgas,obs_avg_fgas,obs_err_fgas,
+         obs_x0_mzr,obs_bw_mzr,obs_avg_mzr,obs_err_mzr, 
+         obs_x0_sfms,obs_bw_sfms,obs_avg_sfms,obs_err_sfms, 
+         obs_x0_mzr_gas,obs_bw_mzr_gas,obs_avg_mzr_gas,obs_err_mzr_gas) = obs_stats
+        
         ## converting to dict for easier manipulation
         batch_params_dict = {params_free[i]:batch_params[i] for i in range(Nfree)}
         full_params_dict = {**params_fixed_astro, **batch_params_dict} # second dict overwrites first one for keys in common
         full_params = jnp.array([full_params_dict[k] for k in full_params_order])
 
         # jax.debug.print('batch_params={} full_params={}',batch_params,full_params)
-
+        
         # NOTE: this needs to be generalized using dicts
         full_params = full_params.at[0].set(10**full_params[0]) # 10**A_M
         full_params = full_params.at[4].set(10**full_params[4]) # 10**A_E
@@ -162,10 +167,10 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
     
     ### our loss will be negative log-posterior = negative * (log-likelihood + log_prior)
     
-    # @jit
-    def negative_log_posterior(batch_params):
+    @jit
+    def negative_log_posterior(batch_params,obs_stats):
         
-        logL = compute_logL(batch_params)
+        logL = compute_logL(batch_params,obs_stats)
         
         logprior = log_prior(batch_params)
         
@@ -180,9 +185,14 @@ def setup(config,minibatch_halo_index,obs_stats,batch_solve):
     if inference_config['adam_logL'] == 'numpyro':
         # TO DO: adam params needs to be dict for numpyro, not array 
         loss_func = run_numpyro.setup(config,minibatch_halo_index,obs_stats,batch_solve) # returns numpyro_loss func
+        
     elif inference_config['adam_logL'] == 'manual':
         loss_func = negative_log_posterior # else use the manual one above (user should check that both numpyro/manual are equivalent)
-    return jax.jit(loss_func), jax.jit(jax.jacfwd(loss_func)), jax.jit(jax.jacfwd(jax.jacfwd(loss_func)))
+
+    ### return jitted loss, grad_loss, hessian_loss
+    return (loss_func, 
+            jax.jit(jax.jacfwd(loss_func,argnums=0)), 
+            jax.jit(jax.jacfwd(jax.jacfwd(loss_func,argnums=0),argnums=0)))
 
 
 

@@ -27,6 +27,7 @@ from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec, NamedSharding
 
+import os, sys
 
 def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_halo_tinit,ts_interp):
 
@@ -91,9 +92,10 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
     print('diffrax shapes',batch_halo_matrix.shape,batch_coeff_matrix.shape,batch_halo_index.shape,flush=True)
 
     
-    def single_solve(halo_index,batch_params):
+    def single_solve(halo_index,batch_params,tol_ode=config['solver_config']['rtol']):
         """
         halo_index = row # of batch_coeffs_matrix, batch_halo_tinit
+        tol_ode = assumed to be same for atol=rtol, uses default config value if not specified
         """
         
         ### INITIAL CONDITIONS
@@ -136,8 +138,7 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
         """ July 14 -- fix to atol=rtol=1e-5, max_steps=16**4, t1=True """
         sol_diffrax = diffeqsolve(terms,solver,
                                   logt_init,logt_final,dt0,initial_conditions,(batch_params,interps),throw=False,adjoint=DirectAdjoint(),
-                                  stepsize_controller=PIDController(rtol=config['solver_config']['rtol'],
-                                                                    atol=config['solver_config']['atol']),
+                                  stepsize_controller=PIDController(rtol=tol_ode,atol=tol_ode),
                                   max_steps=max_steps,
                                   # saveat=SaveAt(ts=t_eval,fn=saveat_fn))
                                   # saveat=SaveAt(t1=True,fn=saveat_fn))
@@ -152,13 +153,15 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
     inds_wanted = jnp.array([0,1,4,5,8,9,12,13])
     
     """ July 7 -- first a wrapper to only autodiff wrt free parameters, not full """
-    def autodiff_jac(params_free,halo_index,params_full):
+    def autodiff_jac(params_free,halo_index,params_full,tol_ode=config['solver_config']['rtol']):
+        """
+        params_free must be already-transformed subset of params_full (see demo/pandya26 and utils/finitediff_grads.py for usage)
+        """
     
         # need to use params_free somewhere (otherwise jac entries are 0) so just replace params_full with it 
         params_full = params_full.at[inds_wanted].set(params_free)
         
-        return single_solve(halo_index,params_full).ys[0]    
-
+        return single_solve(halo_index,params_full,tol_ode).ys[0]    
 
     
     """ 
@@ -273,14 +276,107 @@ def setup(config,integrator,saveat_fn,rand_halo_matrix,rand_coeff_matrix,rand_ha
         ### return batch_solve, batch_jacfwd, jit(single_solve), and jit(jacfwd(single_solve))
         return batch_solve, batch_jacfwd, jit(single_solve), jit(jacfwd(autodiff_jac))
 
+    ##### august 2026 -- port over old finitediff code to test autodiff gradients
+    # this is ONLY to be used with multi-GPU parallelization for jacobians (1 GPU is OK for hessian of loss) 
+    # see utils/finitediff_grads.py and demo/pandya26/finitediff_grads.ipynb for example usage 
+    elif config['runtype'] == 'finitediff':    
+    
+        ##### first autodiff jacobian w/ single or multi-GPU parallelized over params, halos, tol_ode 
+
+        if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) > 1:
+
+            if jax.devices()[0].platform == 'cpu':
+                print('WARNING: runtype=finitediff will not run well on CPUs, requires 1+ GPUs',flush=True)                      
+
+            parallel_jac_autodiff = jit(shard_map(vmap(vmap(vmap(jacfwd(autodiff_jac),in_axes=(None,None,None,0)),
+                                                             in_axes=(None,0,None,None)),
+                                                        in_axes=(0,None,0,None)),
+                                                  mesh=mesh,
+                                                  in_specs=(PartitionSpec('i'),PartitionSpec(),PartitionSpec('i'), PartitionSpec()), 
+                                                  out_specs=PartitionSpec('i'),check_rep=False))  
+
+        elif len(jax.devices('gpu')) == 1:
+
+            parallel_jac_autodiff = jit(vmap(vmap(vmap(jacfwd(autodiff_jac),in_axes=(None,None,None,0)),
+                                                             in_axes=(None,0,None,None)),
+                                                        in_axes=(0,None,0,None)))   
+
+        ##### finite-diff jacobian
+
+        ### now compute finite-difference jacobian for each pset - requires evaluating +/- epsilon (twice for each pset)
+        ### easiest way is to create a shard function that does the double evaluation and returns finite-diff jac
+        ### this function can then be shard_map+vmap over the pset 
+        
+        """ June 20 -- two new vmapped dimensions for ode tolerances (atol=rtol) and eps for finite differencing """
+        def finite_diff_jac(parameters,halo_index,tol_ode,eps_fdiff):
+        
+            ### on GPU: can vmap for parallel/vectorized solve, whereas fori_loop above is XLA-optimized but nevertheless still sequential
+            def single_column(idx):
+                
+                # first perturb this parameter +/- epsilon
+                params_pos = parameters.at[idx].set(parameters[idx] + eps_fdiff)
+                params_neg = parameters.at[idx].set(parameters[idx] - eps_fdiff)
+        
+                # now evaluate ODE for this halo with both psets
+                sol_pos = single_solve(halo_index,params_pos,tol_ode).ys[0]
+                sol_neg = single_solve(halo_index,params_neg,tol_ode).ys[0]
+        
+                # compute column of z=0 jacobian for this one parameter we varied 
+                jac_column = jnp.squeeze((sol_pos - sol_neg) / (2 * eps_fdiff))
+        
+                return jac_column
+        
+            # can vmap over inds_wanted directly instead of introducing aux loop index
+            jac_finitediff = jax.vmap(single_column)(inds_wanted).T
+        
+            return jac_finitediff    
+
+        ### and its parallelized jitted caller 
+
+        if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) > 1:
+
+            if jax.devices()[0].platform == 'cpu':
+                print('WARNING: runtype=finitediff will not run well on CPUs, requires 1+ GPUs',flush=True)           
+            
+            parallel_jac_finitediff = jit(shard_map(vmap(vmap(vmap(vmap(finite_diff_jac,in_axes=(None, None, None, 0)),
+                                                            in_axes=(None, None, 0, None)),
+                                                       in_axes=(None, 0, None, None)),
+                                                  in_axes=(0, None, None, None)),
+                                                    mesh=mesh,
+                                                    in_specs=(PartitionSpec('i'),PartitionSpec(),PartitionSpec(),PartitionSpec()),
+                                                    out_specs=PartitionSpec('i'),check_rep=False))  
+        elif len(jax.devices('gpu')) == 1:
+
+            parallel_jac_finitediff = jit(vmap(vmap(vmap(vmap(finite_diff_jac,in_axes=(None, None, None, 0)),
+                                                            in_axes=(None, None, 0, None)),
+                                                       in_axes=(None, 0, None, None)),
+                                                  in_axes=(0, None, None, None)))  
+
+
+        ##### finally the solver operating over many halos for a single parameter set 
+        ##### this is for the hessian(loss) in demo/pandya26/plotting/finitediff_gradients.ipynb 
+
+        if jax.devices()[0].platform == 'cpu' or len(jax.devices('gpu')) > 1:
+            print('parallelizing batch_solve with shard_map over multi-CPU/GPU for halos only',flush=True)
+        
+            batch_solve = jit(shard_map(vmap(single_solve,in_axes=(0,None)),
+                                        mesh=mesh,in_specs=(PartitionSpec('i'),PartitionSpec(None)),
+                                        out_specs=PartitionSpec('i'),check_rep=False))
+        
+        elif len(jax.devices('gpu')) == 1:
+            print('vmapping batch_solve over single GPU for halos only',flush=True)
+        
+            batch_solve = jit(vmap(single_solve,in_axes=(0,None)))
+
+
+        return parallel_jac_autodiff, parallel_jac_finitediff, batch_solve
+    
     
     else:
-        raise ValueError('runtype must be one of single, sampling, inference, benchmark')    
+        raise ValueError('runtype must be one of single, sampling, inference, benchmark, finitediff')    
 
 
-    return batch_solve
     
 
     
         
-               
